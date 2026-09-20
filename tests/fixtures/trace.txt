@@ -1,0 +1,8 @@
+100 execve("\x2f\x62\x69\x6e\x2f\x78", ["\x78"], 0x0 /* 0 vars */) = 0
+100 openat(AT_FDCWD, "\x2f\x6e\x6f", O_RDONLY) = -1 ENOENT (No such file or directory)
+101 openat(AT_FDCWD, "\x2f\x79", O_RDONLY <unfinished ...>
+101 <... openat resumed>) = 3</y>
+100 open("\x2f\x61\x22\x20\xff", O_RDONLY) = 3
+100 +++ exited with 0 +++
+102 openat(AT_FDCWD, "\x2f\x7a", O_RDONLY <unfinished ...>
+truncated

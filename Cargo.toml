@@ -1,0 +1,46 @@
+[package]
+name = "RunDelta"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Compare observed Linux command executions and file access with strace."
+repository = "https://github.com/Dohyeon2006/rundelta"
+readme = "README.md"
+keywords = ["cli", "linux", "strace", "debugging", "rust"]
+categories = ["command-line-utilities", "development-tools::debugging"]
+# Deliberate source distribution; independent of repository/global gitignore.
+# Internal reports, evidence, probes, IDE state and generated files are excluded.
+include = [
+    "/Cargo.toml",
+    "/Cargo.lock",
+    "/LICENSE",
+    "/README.md",
+    "/assets/rundelta-signal.svg",
+    "/docs/BUILDING.md",
+    "/docs/PROJECT.md",
+    "/tests/fixtures/trace.txt",
+    "/tests/public_cli.rs",
+    "/tests/public_cli.py",
+    "/src/main.rs",
+    "/src/cli.rs",
+    "/src/capture/mod.rs",
+    "/src/parse/mod.rs",
+    "/src/parse/fs_tests.rs",
+    "/src/model/mod.rs",
+    "/src/store/mod.rs",
+    "/src/diff/mod.rs",
+    "/src/report/mod.rs",
+]
+
+[[bin]]
+name = "rundelta"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+signal-hook = "0.3"
+libc = "0.2"
+sha2 = "0.10"

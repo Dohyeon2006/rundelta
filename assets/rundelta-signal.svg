@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" role="img" aria-labelledby="title desc">
+  <title id="title">RunDelta execution comparison signal</title>
+  <desc id="desc">A dark terminal-style dashboard comparing two command runs.</desc>
+  <rect width="1200" height="300" rx="24" fill="#0b1014"/>
+  <rect x="28" y="28" width="1144" height="244" rx="16" fill="#111a20" stroke="#263b46" stroke-width="2"/>
+  <circle cx="64" cy="64" r="7" fill="#f6c65b"/><circle cx="88" cy="64" r="7" fill="#5dd8b0"/><circle cx="112" cy="64" r="7" fill="#5eb8ee"/>
+  <text x="150" y="72" fill="#9bb3c1" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="22">rundelta diff baseline failing</text>
+  <text x="70" y="130" fill="#6d8491" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20">BASELINE</text>
+  <text x="70" y="175" fill="#c8d7df" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="24">.venv/bin/python</text>
+  <path d="M445 165 H620" stroke="#2f6578" stroke-width="3" stroke-dasharray="9 8"/>
+  <path d="M605 150 L630 165 L605 180" fill="none" stroke="#5eb8ee" stroke-width="4"/>
+  <text x="670" y="130" fill="#6d8491" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20">FAILING RUN</text>
+  <text x="670" y="175" fill="#f6c65b" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="24">/usr/bin/python</text>
+  <line x1="70" y1="218" x2="1130" y2="218" stroke="#263b46" stroke-width="2"/>
+  <circle cx="80" cy="246" r="7" fill="#5eb8ee"/>
+  <text x="100" y="253" fill="#b5c8d2" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18">observed difference</text>
+  <circle cx="390" cy="246" r="7" fill="#f6c65b"/>
+  <text x="410" y="253" fill="#b5c8d2" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18">inspect evidence</text>
+  <circle cx="680" cy="246" r="7" fill="#5dd8b0"/>
+  <text x="700" y="253" fill="#b5c8d2" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18">state uncertainty</text>
+</svg>

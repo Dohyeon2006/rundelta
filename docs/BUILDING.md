@@ -72,6 +72,14 @@ Checkout is pinned by commit, fetches complete history, and does not persist cre
 
 For a local equivalent, use a clean isolated checkout, install the stated prerequisites, run all commands above in order, then confirm `git status --porcelain=v1 --untracked-files=all` is empty and repeat the history scan. This checks the workload locally; only a later GitHub run can validate runner provisioning and hosted execution.
 
+Also validate GitHub-specific workflow expressions before committing. Install [actionlint](https://github.com/rhysd/actionlint) outside the checkout (CI pins version 1.7.12 and verifies its archive SHA-256), then run:
+
+```bash
+python3 -B tests/test_export_safety.py --workflow actionlint
+```
+
+This source-only mode checks the actual workflow and rejects a synthetic `runner.temp` expression at job-level `env`, while accepting it at step scope. The workflow sets build/unpack paths from `$RUNNER_TEMP` through `$GITHUB_ENV` during a step. Plain YAML parsing or replaying shell commands does not validate GitHub context availability. Ordinary export tests and unpacked-crate tests do not need actionlint; the workflow itself remains excluded from the crate. No production dependency is added.
+
 ### Binary distribution is a separate review
 
 Rust binaries may retain compiler source locations, dependency-cache locations, and embedded data. Stripping symbols does not necessarily remove paths. An external release build can use rustc's `--remap-path-prefix` with reviewed logical prefixes and a fresh build directory, but source-package safety does not certify a binary. Scan any proposed binary separately, review dependency licenses, and retain useful diagnostics. This source export includes no prebuilt executable and makes no reproducible-binary claim.
@@ -145,6 +153,14 @@ tar -xf "$CARGO_TARGET_DIR/package/RunDelta-0.2.0-alpha.1.crate" \
 Checkout 固定到提交、获取完整历史且不保留凭据。PR 以只读权限验证真实 head，而非合成 merge 提交。导出策略要求经审查公开根提交及线性候选历史，应通过 fast-forward 集成保留该历史。workflow 只纳入源码仓，不进入 crate；所需 fixture 和检查器进入 crate。
 
 本地等价验证使用干净隔离 checkout，安装上述前置依赖，按序执行全部命令，最后确认 `git status --porcelain=v1 --untracked-files=all` 为空并复跑历史扫描。本地通过只验证工作负载；GitHub runner 配置与托管执行仍需日后实际运行验证。
+
+提交前还须验证 GitHub 专有的工作流表达式。在仓库外安装 [actionlint](https://github.com/rhysd/actionlint)（CI 固定 1.7.12 并验证下载包 SHA-256），然后运行：
+
+```bash
+python3 -B tests/test_export_safety.py --workflow actionlint
+```
+
+此源码专用模式检查实际 workflow，并用合成反例拒绝 job 级 `env` 中的 `runner.temp`，同时确认该表达式在步骤级可用。工作流在步骤执行时从 `$RUNNER_TEMP` 生成构建/解包路径，通过 `$GITHUB_ENV` 传给后续步骤。普通 YAML 解析或重放 shell 命令不能验证 GitHub 上下文可用性。普通导出测试及解包测试不需要 actionlint；workflow 仍不进入 crate，也不增加生产依赖。
 
 ### 二进制分发需要单独审查
 

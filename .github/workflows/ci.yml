@@ -15,8 +15,6 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
-      CARGO_TARGET_DIR: ${{ runner.temp }}/rundelta-build
-      RUNDELTA_UNPACK_DIR: ${{ runner.temp }}/rundelta-unpacked
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - name: Checkout complete candidate history
@@ -26,6 +24,23 @@ jobs:
           persist-credentials: false
           # Inspect the actual candidate, not GitHub's synthetic PR merge.
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Configure isolated paths
+        run: |
+          # Runner paths exist at step execution, not job-level env evaluation.
+          printf 'CARGO_TARGET_DIR=%s\nRUNDELTA_UNPACK_DIR=%s\n' \
+            "$RUNNER_TEMP/rundelta-build" "$RUNNER_TEMP/rundelta-unpacked" >> "$GITHUB_ENV"
+      - name: Validate workflow syntax and contexts
+        env:
+          ACTIONLINT_VERSION: '1.7.12'
+          ACTIONLINT_SHA256: '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8'
+        run: |
+          curl --fail --location --silent --show-error --connect-timeout 15 --max-time 120 --retry 2 \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
+            --output "$RUNNER_TEMP/actionlint.tar.gz"
+          printf '%s  %s\n' "$ACTIONLINT_SHA256" "$RUNNER_TEMP/actionlint.tar.gz" | sha256sum --check -
+          mkdir "$RUNNER_TEMP/actionlint"
+          tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP/actionlint" actionlint
+          python3 -B tests/test_export_safety.py --workflow "$RUNNER_TEMP/actionlint/actionlint"
       - name: Install Linux prerequisites
         run: |
           sudo apt-get update

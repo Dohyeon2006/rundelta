@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Synthetic public-export counterexamples, also runnable from the crate."""
+import argparse
 import base64
 from contextlib import contextmanager
 import gzip
@@ -369,5 +370,55 @@ class ExportSafety(unittest.TestCase):
             self.assertIn("<unallowed-file>", result.stdout)
 
 
+class WorkflowSafety(unittest.TestCase):
+    """Source-only Actions checks; ordinary crate tests need no workflow/tool."""
+
+    actionlint = "actionlint"
+
+    def lint(self, source):
+        # Context availability is GitHub-specific, not a YAML syntax rule.
+        # Disable optional Python/shell linters so this check has one dependency.
+        return subprocess.run([self.actionlint, "-shellcheck=", "-pyflakes=", "-"],
+                              input=source, text=True, capture_output=True,
+                              cwd=ROOT, timeout=30)
+
+    def test_checked_in_workflow_has_valid_actions_contexts(self):
+        source = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        result = self.lint(source)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_runner_context_is_rejected_at_job_env(self):
+        source = """on: workflow_dispatch
+jobs:
+  synthetic:
+    runs-on: ubuntu-24.04
+    env:
+      CARGO_TARGET_DIR: ${{ runner.temp }}/rundelta-build
+    steps:
+      - run: 'true'
+"""
+        rejected = self.lint(source)
+        self.assertEqual(rejected.returncode, 1, rejected.stdout + rejected.stderr)
+        self.assertIn('context "runner" is not allowed', rejected.stdout + rejected.stderr)
+        # The same expression is valid at step scope. This prevents a blanket
+        # text ban from masquerading as context-aware validation.
+        accepted = source.replace(
+            "    env:\n      CARGO_TARGET_DIR: ${{ runner.temp }}/rundelta-build\n"
+            "    steps:\n      - run: 'true'\n",
+            "    steps:\n      - run: 'true'\n"
+            "        env:\n          CARGO_TARGET_DIR: ${{ runner.temp }}/rundelta-build\n")
+        checked = self.lint(accepted)
+        self.assertEqual(checked.returncode, 0, checked.stdout + checked.stderr)
+
+
 if __name__ == "__main__":
-    unittest.main(verbosity=2)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--workflow", metavar="ACTIONLINT",
+                        help="run source-only workflow regressions using this actionlint executable")
+    args = parser.parse_args()
+    WorkflowSafety.actionlint = args.workflow or "actionlint"
+    suite = unittest.defaultTestLoader.loadTestsFromTestCase(
+        WorkflowSafety if args.workflow else ExportSafety)
+    result = unittest.TextTestRunner(verbosity=2).run(suite)
+    raise SystemExit(0 if result.wasSuccessful() and result.testsRun and not (
+        result.skipped or result.expectedFailures) else 1)

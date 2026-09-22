@@ -1,6 +1,6 @@
 [package]
 name = "RunDelta"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 edition = "2024"
 license = "MIT"
 description = "Compare observed Linux command executions and file access with strace."
@@ -18,7 +18,12 @@ include = [
     "/assets/rundelta-signal.svg",
     "/docs/BUILDING.md",
     "/docs/PROJECT.md",
+    "/docs/ARCHITECTURE.md",
+    "/docs/CHANGELOG.md",
+    "/tools/check_export.py",
+    "/tests/test_export_safety.py",
     "/tests/fixtures/trace.txt",
+    "/tests/fixtures/finalization_barrier.c",
     "/tests/public_cli.rs",
     "/tests/public_cli.py",
     "/src/main.rs",
@@ -41,6 +46,5 @@ anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-signal-hook = "0.3"
 libc = "0.2"
 sha2 = "0.10"

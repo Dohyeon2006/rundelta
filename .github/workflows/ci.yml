@@ -1,0 +1,70 @@
+name: Public Linux candidate
+
+on:
+  pull_request:
+  push:
+    branches: [main, public-export]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CARGO_TARGET_DIR: ${{ runner.temp }}/rundelta-build
+      RUNDELTA_UNPACK_DIR: ${{ runner.temp }}/rundelta-unpacked
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Checkout complete candidate history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          # Inspect the actual candidate, not GitHub's synthetic PR merge.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Install Linux prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends strace build-essential python3
+          rustup toolchain install stable --profile minimal --component clippy --component rustfmt
+          rustup default stable
+      - name: Format
+        run: cargo fmt --check
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Unit and synthetic CLI contracts
+        run: |
+          cargo test --locked
+          # Frozen unit tests leave an empty scratch parent. Reject leftovers;
+          # never recursively clean away data before the privacy scan.
+          if [ -e target ]; then rmdir target; fi
+      - name: Real CLI and finalization boundary
+        run: cargo test --locked --test public_cli -- --ignored --exact public_cli_workflow
+      - name: Export checker counterexamples
+        run: python3 -B tests/test_export_safety.py
+      - name: Source and complete history scan
+        run: python3 -B tools/check_export.py --root . --history
+      - name: Package and archive scan
+        run: |
+          cargo package --locked
+          python3 -B tools/check_export.py --root . --history \
+            --archive "$CARGO_TARGET_DIR/package/RunDelta-0.2.0-alpha.1.crate"
+      - name: Test the actual unpacked package
+        run: |
+          mkdir "$RUNDELTA_UNPACK_DIR"
+          tar -xf "$CARGO_TARGET_DIR/package/RunDelta-0.2.0-alpha.1.crate" \
+            -C "$RUNDELTA_UNPACK_DIR"
+          cd "$RUNDELTA_UNPACK_DIR/RunDelta-0.2.0-alpha.1"
+          export CARGO_TARGET_DIR="$RUNDELTA_UNPACK_DIR/build"
+          cargo test --locked
+          if [ -e target ]; then rmdir target; fi
+          cargo test --locked --test public_cli -- --ignored --exact public_cli_workflow
+          python3 -B tests/test_export_safety.py
+      - name: Confirm checkout stayed clean
+        run: |
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          python3 -B tools/check_export.py --root . --history

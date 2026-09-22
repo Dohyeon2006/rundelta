@@ -1,3 +1,12 @@
+#![warn(missing_docs)]
+#![deny(clippy::undocumented_unsafe_blocks, unsafe_op_in_unsafe_fn)]
+//! RunDelta process boundary.
+//!
+//! This binary parses declarative CLI input, dispatches exactly one use case,
+//! renders its already-computed result, and maps uncaught application errors to
+//! exit code 2. Capture, storage, comparison, and reliability policy remain in
+//! their owning modules.
+
 mod capture;
 mod cli;
 mod diff;
@@ -5,7 +14,9 @@ mod model;
 mod parse;
 mod report;
 mod store;
+
 use clap::Parser;
+
 fn run() -> anyhow::Result<i32> {
     let args = cli::Cli::parse();
     let root = store::root(args.storage)?;
@@ -14,28 +25,24 @@ fn run() -> anyhow::Result<i32> {
             name,
             command,
             environment,
-        } => capture::record(&root, &name, &command, &environment),
+            max_duration_ms,
+            max_trace_bytes,
+            terminate_grace_ms,
+        } => {
+            let limits = capture::CaptureLimits::from_millis(
+                max_duration_ms,
+                max_trace_bytes,
+                terminate_grace_ms,
+            );
+            let result = capture::record(&root, &name, &command, &environment, limits)?;
+            record_output(&mut std::io::stderr().lock(), &result)
+        }
         cli::Action::List { json } => {
             let records = store::records(&root)?;
             let text = if json {
-                serde_json::to_string_pretty(&records)?
+                report::list_json(&records)?
             } else {
-                records
-                    .iter()
-                    .map(|r| {
-                        format!(
-                            "{}\t{}\t{}\tcapture={}\tstorage={}\t{}\n",
-                            r["id"].as_str().unwrap_or("(no safe ID)"),
-                            r["name"].as_str().unwrap_or("(unknown label)"),
-                            r["directory"].as_str().unwrap_or(""),
-                            r["completeness"].as_str().unwrap_or("unknown"),
-                            r["storage_integrity"]["status"]
-                                .as_str()
-                                .unwrap_or("unavailable"),
-                            r["storage_integrity"]["detail"].as_str().unwrap_or(""),
-                        )
-                    })
-                    .collect()
+                report::list_text(&records)
             };
             output(&text, 0)
         }
@@ -56,11 +63,11 @@ fn run() -> anyhow::Result<i32> {
             let r = diff::evaluate(
                 &left,
                 &right,
-                store::load(&root, &left),
-                store::load(&root, &right),
+                store::load_outcome(&root, &left),
+                store::load_outcome(&root, &right),
             );
             let text = if json {
-                serde_json::to_string_pretty(&r)?
+                report::json(&r)?
             } else {
                 report::text(&r)
             };
@@ -69,9 +76,26 @@ fn run() -> anyhow::Result<i32> {
     }
 }
 fn output(text: &str, code: i32) -> anyhow::Result<i32> {
-    write_output(&mut std::io::stdout().lock(), text, code)
+    write_output(&mut std::io::stdout().lock(), text, code, "stdout")
 }
-fn write_output(out: &mut impl std::io::Write, text: &str, code: i32) -> anyhow::Result<i32> {
+fn record_output(
+    out: &mut impl std::io::Write,
+    result: &model::RecordResult,
+) -> anyhow::Result<i32> {
+    use anyhow::Context;
+    write_output(out, &report::record(result), result.cli_exit, "stderr").with_context(|| {
+        format!(
+            "record {} was committed before its summary output failed",
+            result.id
+        )
+    })
+}
+fn write_output(
+    out: &mut impl std::io::Write,
+    text: &str,
+    code: i32,
+    stream: &str,
+) -> anyhow::Result<i32> {
     use anyhow::Context;
     let result = out
         .write_all(text.as_bytes())
@@ -86,7 +110,7 @@ fn write_output(out: &mut impl std::io::Write, text: &str, code: i32) -> anyhow:
     match result {
         Ok(()) => Ok(code),
         Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(code),
-        Err(e) => Err(e).context("stdout output I/O failure"),
+        Err(e) => Err(e).with_context(|| format!("{stream} output I/O failure")),
     }
 }
 fn main() {
@@ -103,6 +127,7 @@ fn main() {
 #[cfg(test)]
 mod output_tests {
     use super::*;
+    use crate::model::{CaptureCompleteness, CaptureState, RecordResult};
     use std::io::{self, Write};
     struct Sink {
         fail_flush: bool,
@@ -120,9 +145,23 @@ mod output_tests {
             Err(self.kind.into())
         }
     }
+
+    fn finalized_record(code: i32) -> RecordResult {
+        RecordResult {
+            id: "abc-123".into(),
+            name: "test".into(),
+            state: CaptureState::Completed,
+            completeness: CaptureCompleteness::CompleteForSupportedEvents,
+            event_count: 1,
+            warnings: vec![],
+            evidence_dir: "/records/runs/abc-123".into(),
+            cli_exit: code,
+        }
+    }
+
     #[test]
     fn broken_pipe_preserves_computed_status_including_errors() {
-        for code in [0, 1, 2, 3] {
+        for code in [0, 1, 2, 3, 125, 130, 144] {
             for fail_flush in [false, true] {
                 assert_eq!(
                     write_output(
@@ -131,7 +170,8 @@ mod output_tests {
                             kind: io::ErrorKind::BrokenPipe
                         },
                         "report",
-                        code
+                        code,
+                        "stdout",
                     )
                     .unwrap(),
                     code
@@ -149,6 +189,7 @@ mod output_tests {
                 },
                 "report",
                 0,
+                "stdout",
             )
             .unwrap_err();
             assert!(e.to_string().contains("stdout"));
@@ -158,7 +199,48 @@ mod output_tests {
             );
         }
         let mut bytes = vec![];
-        write_output(&mut bytes, "one\n", 0).unwrap();
+        write_output(&mut bytes, "one\n", 0, "stdout").unwrap();
         assert_eq!(bytes, b"one\n");
+    }
+
+    #[test]
+    fn record_stderr_broken_pipe_preserves_the_business_status() {
+        for code in [0, 125, 130, 144] {
+            for fail_flush in [false, true] {
+                assert_eq!(
+                    record_output(
+                        &mut Sink {
+                            fail_flush,
+                            kind: io::ErrorKind::BrokenPipe,
+                        },
+                        &finalized_record(code),
+                    )
+                    .unwrap(),
+                    code
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn record_stderr_errors_identify_the_committed_record() {
+        for fail_flush in [false, true] {
+            let error = record_output(
+                &mut Sink {
+                    fail_flush,
+                    kind: io::ErrorKind::PermissionDenied,
+                },
+                &finalized_record(0),
+            )
+            .unwrap_err();
+            let message = format!("{error:#}");
+            assert!(message.contains("abc-123"), "{message}");
+            assert!(message.contains("committed"), "{message}");
+            assert!(message.contains("stderr output I/O failure"), "{message}");
+            assert_eq!(
+                error.downcast_ref::<io::Error>().unwrap().kind(),
+                io::ErrorKind::PermissionDenied
+            );
+        }
     }
 }

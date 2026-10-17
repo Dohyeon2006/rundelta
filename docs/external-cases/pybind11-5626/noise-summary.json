@@ -1,0 +1,318 @@
+{
+  "changes": 446,
+  "unique_paths": 420,
+  "file_calls": 712,
+  "sides": {
+    "right": 223,
+    "left": 223
+  },
+  "operations": {
+    "openat": 384,
+    "access": 62
+  },
+  "prefixes": {
+    "${CASE}/consumer/build": 348,
+    "${TMP}": 98
+  },
+  "result_sets": {
+    "success": 350,
+    "ENOENT": 78,
+    "ENOENT+success": 18
+  },
+  "calls_per_key": {
+    "1": 304,
+    "3": 76,
+    "2": 52,
+    "4": 10,
+    "11": 2,
+    "7": 2
+  },
+  "calls_by_mode": {
+    "probe": 82,
+    "read": 292,
+    "write": 228,
+    "read_write": 110
+  },
+  "calls_by_outcome": {
+    "success": 596,
+    "ENOENT": 116
+  },
+  "parent_calls": {
+    "bash": 376,
+    "c++": 94,
+    "gmake": 70,
+    "ld": 46,
+    "collect2": 44,
+    "cmake": 30,
+    "lto-wrapper": 26,
+    "cc": 20,
+    "make": 4,
+    "lto1": 2
+  },
+  "actor_calls": {
+    "cmake": 394,
+    "gmake": 52,
+    "lto-wrapper": 46,
+    "lto1": 44,
+    "ld": 44,
+    "c++": 42,
+    "as": 34,
+    "collect2": 24,
+    "cc": 10,
+    "cc1plus": 10,
+    "make": 6,
+    "cc1": 4,
+    "strip": 2
+  },
+  "parent_instances": 92,
+  "rows_with_exclusive_create": 86,
+  "groups": [
+    {
+      "category": "variable_suffix_sidecar",
+      "changes": 138,
+      "file_calls": 146,
+      "sides": {
+        "right": 69,
+        "left": 69
+      },
+      "operations": {
+        "openat": 138
+      },
+      "prefixes": {
+        "${CASE}/consumer/build": 138
+      },
+      "result_sets": {
+        "success": 138
+      },
+      "parent_calls": {
+        "bash": 146
+      }
+    },
+    {
+      "category": "generated_build_rules",
+      "changes": 60,
+      "file_calls": 60,
+      "sides": {
+        "right": 30,
+        "left": 30
+      },
+      "operations": {
+        "openat": 42,
+        "access": 18
+      },
+      "prefixes": {
+        "${CASE}/consumer/build": 60
+      },
+      "result_sets": {
+        "success": 42,
+        "ENOENT": 18
+      },
+      "parent_calls": {
+        "gmake": 30,
+        "bash": 24,
+        "cmake": 6
+      }
+    },
+    {
+      "category": "extensionless_output_or_probe",
+      "changes": 56,
+      "file_calls": 114,
+      "sides": {
+        "right": 28,
+        "left": 28
+      },
+      "operations": {
+        "openat": 32,
+        "access": 24
+      },
+      "prefixes": {
+        "${CASE}/consumer/build": 38,
+        "${TMP}": 18
+      },
+      "result_sets": {
+        "success": 44,
+        "ENOENT": 12
+      },
+      "parent_calls": {
+        "bash": 40,
+        "lto-wrapper": 22,
+        "ld": 20,
+        "gmake": 14,
+        "c++": 8,
+        "collect2": 6,
+        "cmake": 4
+      }
+    },
+    {
+      "category": "configuration_cache_or_state",
+      "changes": 54,
+      "file_calls": 90,
+      "sides": {
+        "right": 27,
+        "left": 27
+      },
+      "operations": {
+        "openat": 36,
+        "access": 18
+      },
+      "prefixes": {
+        "${CASE}/consumer/build": 54
+      },
+      "result_sets": {
+        "success": 30,
+        "ENOENT": 24
+      },
+      "parent_calls": {
+        "bash": 72,
+        "gmake": 18
+      }
+    },
+    {
+      "category": "directory_access",
+      "changes": 42,
+      "file_calls": 90,
+      "sides": {
+        "right": 21,
+        "left": 21
+      },
+      "operations": {
+        "openat": 42
+      },
+      "prefixes": {
+        "${CASE}/consumer/build": 42
+      },
+      "result_sets": {
+        "ENOENT+success": 18,
+        "ENOENT": 18,
+        "success": 6
+      },
+      "parent_calls": {
+        "bash": 90
+      }
+    },
+    {
+      "category": "object_intermediate",
+      "changes": 34,
+      "file_calls": 84,
+      "sides": {
+        "right": 17,
+        "left": 17
+      },
+      "operations": {
+        "openat": 34
+      },
+      "prefixes": {
+        "${TMP}": 28,
+        "${CASE}/consumer/build": 6
+      },
+      "result_sets": {
+        "success": 34
+      },
+      "parent_calls": {
+        "c++": 40,
+        "collect2": 26,
+        "cc": 8,
+        "cmake": 4,
+        "ld": 4,
+        "lto1": 2
+      }
+    },
+    {
+      "category": "linker_control_or_intermediate",
+      "changes": 22,
+      "file_calls": 50,
+      "sides": {
+        "right": 11,
+        "left": 11
+      },
+      "operations": {
+        "openat": 22
+      },
+      "prefixes": {
+        "${TMP}": 22
+      },
+      "result_sets": {
+        "success": 22
+      },
+      "parent_calls": {
+        "ld": 16,
+        "cmake": 12,
+        "collect2": 12,
+        "c++": 8,
+        "lto-wrapper": 2
+      }
+    },
+    {
+      "category": "assembly_intermediate",
+      "changes": 18,
+      "file_calls": 54,
+      "sides": {
+        "right": 9,
+        "left": 9
+      },
+      "operations": {
+        "openat": 18
+      },
+      "prefixes": {
+        "${TMP}": 18
+      },
+      "result_sets": {
+        "success": 18
+      },
+      "parent_calls": {
+        "c++": 28,
+        "gmake": 8,
+        "cc": 8,
+        "make": 4,
+        "cmake": 4,
+        "lto-wrapper": 2
+      }
+    },
+    {
+      "category": "source_input_or_generated_source",
+      "changes": 16,
+      "file_calls": 18,
+      "sides": {
+        "right": 8,
+        "left": 8
+      },
+      "operations": {
+        "openat": 14,
+        "access": 2
+      },
+      "prefixes": {
+        "${TMP}": 12,
+        "${CASE}/consumer/build": 4
+      },
+      "result_sets": {
+        "success": 16
+      },
+      "parent_calls": {
+        "c++": 10,
+        "bash": 4,
+        "cc": 4
+      }
+    },
+    {
+      "category": "option_shaped_path_probe",
+      "changes": 6,
+      "file_calls": 6,
+      "sides": {
+        "right": 3,
+        "left": 3
+      },
+      "operations": {
+        "openat": 6
+      },
+      "prefixes": {
+        "${CASE}/consumer/build": 6
+      },
+      "result_sets": {
+        "ENOENT": 6
+      },
+      "parent_calls": {
+        "ld": 6
+      }
+    }
+  ]
+}

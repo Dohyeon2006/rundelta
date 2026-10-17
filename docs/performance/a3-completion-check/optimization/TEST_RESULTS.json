@@ -1,0 +1,89 @@
+[
+  {
+    "check": "unit",
+    "exit_code": 0
+  },
+  {
+    "check": "platform",
+    "exit_code": 0
+  },
+  {
+    "check": "audit",
+    "exit_code": 0
+  },
+  {
+    "check": "field",
+    "exit_code": 1
+  },
+  {
+    "check": "fmt",
+    "exit_code": 0
+  },
+  {
+    "check": "clippy",
+    "exit_code": 0
+  },
+  {
+    "check": "freeze",
+    "exit_code": 0
+  },
+  {
+    "check": "external",
+    "exit_code": 0
+  },
+  {
+    "check": "baseline",
+    "exit_code": 0
+  },
+  {
+    "check": "fold-unit",
+    "exit_code": 0
+  },
+  {
+    "check": "fold-audit",
+    "exit_code": 0
+  },
+  {
+    "check": "release-contract",
+    "exit_code": 0
+  },
+  {
+    "check": "release-before-contract",
+    "exit_code": 0
+  },
+  {
+    "check": "field-old-binary-on-historical",
+    "exit_code": 1,
+    "reason": "persisted historical parser warnings"
+  },
+  {
+    "check": "field-fresh-generation",
+    "exit_code": 0
+  },
+  {
+    "check": "field-fresh-audit",
+    "exit_code": 1,
+    "reason": "preexisting A2 uncertainty conflicts with warnings==[]"
+  },
+  {
+    "check": "field-fresh-old-binary-audit",
+    "exit_code": 1,
+    "same_output_as_after": true
+  },
+  {
+    "check": "field-replay-equivalence",
+    "exit_code": 0,
+    "cases": 15
+  },
+  {
+    "check": "dev-release-snapshot-equivalence",
+    "exit_code": 0,
+    "cases": 20
+  },
+  {
+    "check": "unit-release",
+    "exit_code": 0,
+    "passed": 32,
+    "platform_entries_ignored": 5
+  }
+]

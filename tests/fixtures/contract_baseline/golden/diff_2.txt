@@ -1,0 +1,10 @@
+Run comparison: missing-record → baseline-left
+Observed differences: not evaluated
+Capture completeness: left=unknown, right=complete
+Storage integrity: left=unavailable, right=verified
+Exit code: 2
+ERROR: left: record "missing-record": expected one safe ID/label match, found 0; unknown labels require an exact recognizable directory ID; unsafe entries cannot be selected
+
+Total observed changes: 0 (including folded details)
+
+Observed changes are investigation clues, not proof of a root cause.

@@ -11,7 +11,7 @@ fn public_synthetic_cli_contracts() {
 }
 
 #[test]
-#[ignore = "requires Linux, Python 3, cc, pidfds and a compatible strace"]
+#[ignore = "requires Linux x86_64, Python 3, cc, pidfds and a compatible strace"]
 fn public_cli_workflow() {
     let status = std::process::Command::new("python3")
         .arg("-B")

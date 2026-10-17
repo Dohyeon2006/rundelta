@@ -1,0 +1,12 @@
+Run comparison: baseline-left → legacy-v2
+Observed differences: no
+Capture completeness: left=complete, right=complete
+Storage integrity: left=verified, right=unverified
+Exit code: 3
+RELIABILITY NOT ESTABLISHED: comparison cannot establish a complete, verified result.
+No differences in supported, aggregated observations.
+
+Total observed changes: 0 (including folded details)
+warning: legacy-v2: storage integrity unverified: legacy record has no finalization checksums
+
+Observed changes are investigation clues, not proof of a root cause.

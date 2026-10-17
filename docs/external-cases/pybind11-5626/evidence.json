@@ -1,0 +1,513 @@
+{
+  "schema_version": 1,
+  "status": "frozen external diagnostic case, not evidence of an upstream defect",
+  "rundelta_commit": "a5f1a7d444fe965974ac1c0aa021d36bc9e346a7",
+  "upstream_issue": "https://github.com/pybind/pybind11/issues/5626",
+  "issue_snapshot": {
+    "state": "closed",
+    "state_reason": "completed",
+    "closed_at": "2026-07-25T16:13:26Z",
+    "comments_read": false
+  },
+  "upstream_tag_commit": "a2e59f0e7065404b44dfe92a28aca47ba1378dc4",
+  "upstream_readonly_head": "296d5d1d3664dd0e0616e81920342e56b7249171",
+  "original_issue_reproduced": false,
+  "controlled_failure": "Python 3.12 virtualenv with CPATH pointing at Python 3.10 headers",
+  "versions": {
+    "cmake": "3.31.2",
+    "pybind11": "2.13.6",
+    "python": [
+      "3.10.19",
+      "3.12.10"
+    ],
+    "gcc": "16.2.1",
+    "host": "Fedora Linux x86_64"
+  },
+  "issue_snippet_sha256": {
+    "cpp": "27af4946d3fd1925af3c8e2dc7f9aa03b7e0c0671ba255dbc40f2d23b868f130",
+    "cmake": "771aaf239f781619639b1c89b550d361642c66bded3fb715818b2e2fd970d830"
+  },
+  "runs": [
+    {
+      "label": "native310",
+      "target_exit": 0,
+      "parser_warnings": 0,
+      "capture": "complete_for_supported_events",
+      "storage": "verified"
+    },
+    {
+      "label": "native312",
+      "target_exit": 0,
+      "parser_warnings": 0,
+      "capture": "complete_for_supported_events",
+      "storage": "verified"
+    },
+    {
+      "label": "controlled312",
+      "target_exit": 1,
+      "parser_warnings": 0,
+      "capture": "complete_for_supported_events",
+      "storage": "verified"
+    },
+    {
+      "label": "native312repeat",
+      "target_exit": 0,
+      "parser_warnings": 0,
+      "capture": "complete_for_supported_events",
+      "storage": "verified"
+    }
+  ],
+  "comparisons": [
+    {
+      "left": "native310",
+      "right": "native312",
+      "diff_exit_code": 1,
+      "reliability": {
+        "left": {
+          "capture": "complete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "complete",
+          "storage": "verified"
+        }
+      },
+      "changes": 2158,
+      "interpreter_ranks": [
+        3,
+        336
+      ],
+      "Python_h_ranks": [
+        15,
+        190,
+        350,
+        525
+      ],
+      "top5": [
+        {
+          "category": "Execution attempt changes",
+          "subject": "${CASE}/venv312/bin/as (execve)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "ENOENT"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "source": "private-original-trace",
+              "line": 654,
+              "end_line": 654
+            },
+            {
+              "source": "private-original-trace",
+              "line": 1423,
+              "end_line": 1423
+            },
+            {
+              "source": "private-original-trace",
+              "line": 2365,
+              "end_line": 2365
+            }
+          ]
+        },
+        {
+          "category": "Execution attempt changes",
+          "subject": "${CASE}/venv312/bin/make (execve)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "ENOENT"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "source": "private-original-trace",
+              "line": 8618,
+              "end_line": 8618
+            },
+            {
+              "source": "private-original-trace",
+              "line": 8722,
+              "end_line": 8722
+            }
+          ]
+        },
+        {
+          "category": "Executable changes",
+          "subject": "${CASE}/venv312/bin/python (execve)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "source": "private-original-trace",
+              "line": 3443,
+              "end_line": 3443
+            },
+            {
+              "source": "private-original-trace",
+              "line": 3504,
+              "end_line": 3504
+            },
+            {
+              "source": "private-original-trace",
+              "line": 3574,
+              "end_line": 3574
+            }
+          ]
+        },
+        {
+          "category": "New file access",
+          "subject": "${CASE}/consumer/build/CMakeFiles/CMakeScratch/TryCompile-AeZVzJ/CMakeLists.txt (access)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "source": "private-original-trace",
+              "line": 2064,
+              "end_line": 2064
+            },
+            {
+              "source": "private-original-trace",
+              "line": 2066,
+              "end_line": 2066
+            },
+            {
+              "source": "private-original-trace",
+              "line": 2187,
+              "end_line": 2187
+            }
+          ]
+        },
+        {
+          "category": "New file access",
+          "subject": "${CASE}/consumer/build/CMakeFiles/CMakeScratch/TryCompile-AeZVzJ/cmTC_3b4fc (access)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "source": "private-original-trace",
+              "line": 2598,
+              "end_line": 2598
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "left": "native312",
+      "right": "controlled312",
+      "diff_exit_code": 1,
+      "reliability": {
+        "left": {
+          "capture": "complete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "complete",
+          "storage": "verified"
+        }
+      },
+      "changes": 975,
+      "interpreter_ranks": [],
+      "Python_h_ranks": [
+        177,
+        452
+      ],
+      "top5": [
+        {
+          "category": "Exit status",
+          "subject": "",
+          "detail_group": null,
+          "left": [
+            "code=Some(0), signal=None"
+          ],
+          "right": [
+            "code=Some(1), signal=None"
+          ],
+          "left_evidence": [],
+          "right_evidence": []
+        },
+        {
+          "category": "New file access",
+          "subject": "${CASE}/consumer/build/CMakeFiles/CMakeScratch/TryCompile-IKCnCo/CMakeLists.txt (access)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "source": "private-original-trace",
+              "line": 4394,
+              "end_line": 4394
+            },
+            {
+              "source": "private-original-trace",
+              "line": 4396,
+              "end_line": 4396
+            },
+            {
+              "source": "private-original-trace",
+              "line": 4537,
+              "end_line": 4537
+            }
+          ]
+        },
+        {
+          "category": "New file access",
+          "subject": "${CASE}/consumer/build/CMakeFiles/CMakeScratch/TryCompile-IKCnCo/cmTC_e1e8d (access)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "source": "private-original-trace",
+              "line": 5143,
+              "end_line": 5143
+            }
+          ]
+        },
+        {
+          "category": "New file access",
+          "subject": "${CASE}/consumer/build/CMakeFiles/CMakeScratch/TryCompile-IKCnCo/cmTC_e1e8d_loc (access)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "source": "private-original-trace",
+              "line": 5141,
+              "end_line": 5141
+            }
+          ]
+        },
+        {
+          "category": "New file access",
+          "subject": "${CASE}/consumer/build/CMakeFiles/CMakeScratch/TryCompile-IKCnCo/src.cxx (access)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "source": "private-original-trace",
+              "line": 4563,
+              "end_line": 4563
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "left": "native310",
+      "right": "controlled312",
+      "diff_exit_code": 1,
+      "reliability": {
+        "left": {
+          "capture": "complete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "complete",
+          "storage": "verified"
+        }
+      },
+      "changes": 2469,
+      "interpreter_ranks": [
+        4,
+        328
+      ],
+      "Python_h_ranks": [
+        16,
+        191,
+        342,
+        517
+      ],
+      "top5": [
+        {
+          "category": "Exit status",
+          "subject": "",
+          "detail_group": null,
+          "left": [
+            "code=Some(0), signal=None"
+          ],
+          "right": [
+            "code=Some(1), signal=None"
+          ],
+          "left_evidence": [],
+          "right_evidence": []
+        },
+        {
+          "category": "Execution attempt changes",
+          "subject": "${CASE}/venv312/bin/as (execve)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "ENOENT"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "source": "private-original-trace",
+              "line": 655,
+              "end_line": 655
+            },
+            {
+              "source": "private-original-trace",
+              "line": 1425,
+              "end_line": 1425
+            },
+            {
+              "source": "private-original-trace",
+              "line": 2368,
+              "end_line": 2368
+            }
+          ]
+        },
+        {
+          "category": "Execution attempt changes",
+          "subject": "${CASE}/venv312/bin/make (execve)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "ENOENT"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "source": "private-original-trace",
+              "line": 8931,
+              "end_line": 8931
+            },
+            {
+              "source": "private-original-trace",
+              "line": 9037,
+              "end_line": 9037
+            }
+          ]
+        },
+        {
+          "category": "Executable changes",
+          "subject": "${CASE}/venv312/bin/python (execve)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "source": "private-original-trace",
+              "line": 3447,
+              "end_line": 3447
+            },
+            {
+              "source": "private-original-trace",
+              "line": 3508,
+              "end_line": 3508
+            },
+            {
+              "source": "private-original-trace",
+              "line": 3578,
+              "end_line": 3578
+            }
+          ]
+        },
+        {
+          "category": "New file access",
+          "subject": "${CASE}/consumer/build/CMakeFiles/CMakeScratch/TryCompile-IKCnCo/CMakeLists.txt (access)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "source": "private-original-trace",
+              "line": 4394,
+              "end_line": 4394
+            },
+            {
+              "source": "private-original-trace",
+              "line": 4396,
+              "end_line": 4396
+            },
+            {
+              "source": "private-original-trace",
+              "line": 4537,
+              "end_line": 4537
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "isolated_key_evidence": {
+    "rank": 177,
+    "change": {
+      "category": "New file access",
+      "subject": "${CASE}/pythons/cpython-3.10.19-linux-x86_64-gnu/include/python3.10/Python.h (openat)",
+      "left": [],
+      "right": [
+        "success"
+      ]
+    },
+    "actor": "cc1plus",
+    "actor_parent": "c++",
+    "source_lines": {
+      "normal_exec": [
+        5843,
+        5845
+      ],
+      "normal_header": [
+        5894,
+        5894
+      ],
+      "controlled_exec": [
+        5848,
+        5850
+      ],
+      "controlled_header": [
+        5906,
+        5906
+      ]
+    },
+    "limits": "line references are provenance in private original traces, not shipped raw data"
+  },
+  "normal_repeat": {
+    "observed_differences": true,
+    "changes": 446,
+    "file_events_under_changed_keys": 712,
+    "unique_paths": 420,
+    "exec_changes": 0,
+    "exit_code": 1
+  },
+  "private_source_sha256": {
+    "native312--native312repeat.json": "bd73c46c3a57e9cc5de38223a5c43376afa562792c3eaf4a74fcff0fb952d28b",
+    "native312--controlled312.json": "a606a135c48f29e89fe7afe418ff00be1600d34b1924659b50000ffec4f659b8"
+  },
+  "privacy": "${CASE} replaces private case root, ${TMP} replaces temporary root. No raw traces or full metadata/argv/environment are distributed."
+}

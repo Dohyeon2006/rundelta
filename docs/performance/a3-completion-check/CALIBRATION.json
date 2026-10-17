@@ -1,0 +1,134 @@
+{
+  "events": 2,
+  "processes": 1,
+  "predicted_any_predicate_visits": 4,
+  "samples": [
+    {
+      "hits": {
+        "start": 1,
+        "end": 1,
+        "final": 1
+      },
+      "start_frame": "rundelta::capture::record",
+      "start_memory_kib": {
+        "VmRSS": 5428,
+        "VmHWM": 5428
+      },
+      "end_frame": "rundelta::capture::record",
+      "completion_wall_ms": 0.05835,
+      "end_memory_kib": {
+        "VmRSS": 5428,
+        "VmHWM": 5428
+      },
+      "final_frame": "rundelta::capture::record",
+      "final_memory_kib": {
+        "VmRSS": 5428,
+        "VmHWM": 5428
+      },
+      "exit_code": 0
+    },
+    {
+      "hits": {
+        "start": 1,
+        "end": 1,
+        "final": 1
+      },
+      "start_frame": "rundelta::capture::record",
+      "start_memory_kib": {
+        "VmRSS": 5448,
+        "VmHWM": 5448
+      },
+      "end_frame": "rundelta::capture::record",
+      "completion_wall_ms": 0.084299,
+      "end_memory_kib": {
+        "VmRSS": 5448,
+        "VmHWM": 5448
+      },
+      "final_frame": "rundelta::capture::record",
+      "final_memory_kib": {
+        "VmRSS": 5448,
+        "VmHWM": 5448
+      },
+      "exit_code": 0
+    },
+    {
+      "hits": {
+        "start": 1,
+        "end": 1,
+        "final": 1
+      },
+      "start_frame": "rundelta::capture::record",
+      "start_memory_kib": {
+        "VmRSS": 5380,
+        "VmHWM": 5380
+      },
+      "end_frame": "rundelta::capture::record",
+      "completion_wall_ms": 0.10543,
+      "end_memory_kib": {
+        "VmRSS": 5380,
+        "VmHWM": 5380
+      },
+      "final_frame": "rundelta::capture::record",
+      "final_memory_kib": {
+        "VmRSS": 5380,
+        "VmHWM": 5380
+      },
+      "exit_code": 0
+    },
+    {
+      "hits": {
+        "start": 1,
+        "end": 1,
+        "final": 1
+      },
+      "start_frame": "rundelta::capture::record",
+      "start_memory_kib": {
+        "VmRSS": 5380,
+        "VmHWM": 5380
+      },
+      "end_frame": "rundelta::capture::record",
+      "completion_wall_ms": 0.06939,
+      "end_memory_kib": {
+        "VmRSS": 5380,
+        "VmHWM": 5380
+      },
+      "final_frame": "rundelta::capture::record",
+      "final_memory_kib": {
+        "VmRSS": 5380,
+        "VmHWM": 5380
+      },
+      "exit_code": 0
+    },
+    {
+      "hits": {
+        "start": 1,
+        "end": 1,
+        "final": 1
+      },
+      "start_frame": "rundelta::capture::record",
+      "start_memory_kib": {
+        "VmRSS": 5432,
+        "VmHWM": 5432
+      },
+      "end_frame": "rundelta::capture::record",
+      "completion_wall_ms": 0.057559,
+      "end_memory_kib": {
+        "VmRSS": 5432,
+        "VmHWM": 5432
+      },
+      "final_frame": "rundelta::capture::record",
+      "final_memory_kib": {
+        "VmRSS": 5432,
+        "VmHWM": 5432
+      },
+      "exit_code": 0
+    }
+  ],
+  "completion_wall_ms": {
+    "min": 0.057559,
+    "median": 0.06939,
+    "max": 0.10543,
+    "sample_stdev": 0.020157748046346843
+  },
+  "note": "Additional post-matrix minimum-work calibration; not subtracted from primary results; not a measured pure debugger overhead"
+}

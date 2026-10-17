@@ -1,0 +1,40 @@
+{
+  "cases": [
+    "collector_mismatch",
+    "collector_signal",
+    "empty",
+    "execs",
+    "exit_before_exec",
+    "failed_spawn",
+    "fork_child_first",
+    "fork_root_first",
+    "interleaved",
+    "last_exit",
+    "missing_children",
+    "missing_root",
+    "no_root",
+    "realtime",
+    "return_143",
+    "roots",
+    "signal",
+    "single",
+    "unknown_event",
+    "unknown_signal"
+  ],
+  "count": 20,
+  "before_sha256": "69c11346d3992ae66da1d50c7a80c179a4fda139f1f72551b1cefc149859d1ed",
+  "after_sha256": "69c11346d3992ae66da1d50c7a80c179a4fda139f1f72551b1cefc149859d1ed",
+  "excluded_metadata_fields": [
+    "id",
+    "started",
+    "ended"
+  ],
+  "comparison": "all remaining persisted metadata, events, storage integrity, record/diff return codes and reliability",
+  "test_sha256": "029c1c322ce45b6ff31006246b17e1ea125a244b1e20e798d71e361f2c4b0f35",
+  "profiles": {
+    "dev-before": "69c11346d3992ae66da1d50c7a80c179a4fda139f1f72551b1cefc149859d1ed",
+    "dev-after": "69c11346d3992ae66da1d50c7a80c179a4fda139f1f72551b1cefc149859d1ed",
+    "release-before": "69c11346d3992ae66da1d50c7a80c179a4fda139f1f72551b1cefc149859d1ed",
+    "release-after": "69c11346d3992ae66da1d50c7a80c179a4fda139f1f72551b1cefc149859d1ed"
+  }
+}

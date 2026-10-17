@@ -1,0 +1,13 @@
+Storage integrity: verified — metadata and events match finalized byte counts, event count and SHA-256; raw logs are not checksummed
+baseline-left (abc001-101)
+State: completed / complete_for_supported_events
+Command: ["/usr/bin/baseline", "--mode", "fixed"]
+Initial cwd: /baseline
+Exit: Some(0); signal: None
+Events: 1
+env BASELINE_MODE: fixed
+env OPTIONAL: (unset)
+Path semantics: absolute spellings are recorded syscall/strace observations, not physical identity guarantees; relative paths stay uncertain. Older records may contain historical CWD-derived spellings; consult raw evidence.
+  Last observed CWD (context only, not a current physical path): /baseline
+  Path context: recorded absolute spelling; verify syscall evidence
+101 openat /baseline/input.txt => success [runs/abc001-101/raw/trace.log:1-1]

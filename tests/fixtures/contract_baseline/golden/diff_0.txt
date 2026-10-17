@@ -1,0 +1,10 @@
+Run comparison: baseline-left → baseline-left
+Observed differences: no
+Capture completeness: left=complete, right=complete
+Storage integrity: left=verified, right=verified
+Exit code: 0
+No differences in supported, aggregated observations.
+
+Total observed changes: 0 (including folded details)
+
+Observed changes are investigation clues, not proof of a root cause.

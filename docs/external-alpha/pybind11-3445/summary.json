@@ -1,0 +1,260 @@
+{
+  "schema_version": 4,
+  "observed_differences": true,
+  "reliability": {
+    "left": {
+      "capture": "complete",
+      "storage": "verified"
+    },
+    "right": {
+      "capture": "complete",
+      "storage": "verified"
+    }
+  },
+  "exit_code": 1,
+  "errors": [],
+  "warnings": [],
+  "total_changes": 635,
+  "categories": {
+    "Exit status": 1,
+    "Selected startup environment": 1,
+    "New file access": 119,
+    "Executable changes": 3,
+    "Removed file access": 511
+  },
+  "detail_group_candidates": 126,
+  "top_five": [
+    {
+      "rank": 1,
+      "category": "Exit status",
+      "subject": "",
+      "detail_group": null,
+      "left": [
+        "code=Some(0), signal=None"
+      ],
+      "right": [
+        "code=Some(1), signal=None"
+      ],
+      "left_evidence": [],
+      "right_evidence": []
+    },
+    {
+      "rank": 2,
+      "category": "Selected startup environment",
+      "subject": "CMAKE_PREFIX_PATH",
+      "detail_group": null,
+      "left": [
+        "value=\"${WORK}/pybind/venv/lib/python3.9/site-packages/pybind11/share/cmake/pybind11\""
+      ],
+      "right": [
+        "(unset)"
+      ],
+      "left_evidence": [],
+      "right_evidence": []
+    },
+    {
+      "rank": 3,
+      "category": "New file access",
+      "subject": "${WORK}/pybind/build/CMakeFiles/CMakeOutput.log (access)",
+      "detail_group": null,
+      "left": [],
+      "right": [
+        "success"
+      ],
+      "left_evidence": [],
+      "right_evidence": [
+        {
+          "file": "raw/trace.log",
+          "line": 2402,
+          "end_line": 2402
+        }
+      ]
+    },
+    {
+      "rank": 4,
+      "category": "New file access",
+      "subject": "${WORK}/pybind/build/CMakeFiles/CMakeTmp/cmTC_ad1fd (access)",
+      "detail_group": null,
+      "left": [],
+      "right": [
+        "success"
+      ],
+      "left_evidence": [],
+      "right_evidence": [
+        {
+          "file": "raw/trace.log",
+          "line": 2271,
+          "end_line": 2271
+        }
+      ]
+    },
+    {
+      "rank": 5,
+      "category": "New file access",
+      "subject": "${WORK}/pybind/build/CMakeFiles/CMakeTmp/cmTC_bfbb3 (access)",
+      "detail_group": null,
+      "left": [],
+      "right": [
+        "success"
+      ],
+      "left_evidence": [],
+      "right_evidence": [
+        {
+          "file": "raw/trace.log",
+          "line": 1725,
+          "end_line": 1725
+        }
+      ]
+    }
+  ],
+  "selected_later_observations": [
+    {
+      "rank": 110,
+      "category": "Removed file access",
+      "subject": "${WORK}/pybind/venv/lib/python3.9/site-packages/pybind11/share/cmake/pybind11/pybind11Config.cmake (access)",
+      "detail_group": null,
+      "left": [
+        "success"
+      ],
+      "right": [],
+      "left_evidence": [
+        {
+          "file": "raw/trace.log",
+          "line": 2380,
+          "end_line": 2380
+        },
+        {
+          "file": "raw/trace.log",
+          "line": 2385,
+          "end_line": 2385
+        },
+        {
+          "file": "raw/trace.log",
+          "line": 3589,
+          "end_line": 3589
+        }
+      ],
+      "right_evidence": []
+    },
+    {
+      "rank": 230,
+      "category": "Removed file access",
+      "subject": "${WORK}/pybind/venv/lib/python3.9/site-packages/pybind11/share/cmake/pybind11/pybind11Config.cmake (openat)",
+      "detail_group": null,
+      "left": [
+        "success"
+      ],
+      "right": [],
+      "left_evidence": [
+        {
+          "file": "raw/trace.log",
+          "line": 2386,
+          "end_line": 2386
+        }
+      ],
+      "right_evidence": []
+    },
+    {
+      "rank": 510,
+      "category": "New file access",
+      "subject": "${RUST_TOOLCHAIN}/pybind11-config.cmake (access)",
+      "detail_group": "One-sided unsuccessful file accesses (not necessarily faults)",
+      "left": [],
+      "right": [
+        "ENOENT"
+      ],
+      "left_evidence": [],
+      "right_evidence": [
+        {
+          "file": "raw/trace.log",
+          "line": 2328,
+          "end_line": 2328
+        }
+      ]
+    },
+    {
+      "rank": 511,
+      "category": "New file access",
+      "subject": "${RUST_TOOLCHAIN}/pybind11Config.cmake (access)",
+      "detail_group": "One-sided unsuccessful file accesses (not necessarily faults)",
+      "left": [],
+      "right": [
+        "ENOENT"
+      ],
+      "left_evidence": [],
+      "right_evidence": [
+        {
+          "file": "raw/trace.log",
+          "line": 2327,
+          "end_line": 2327
+        }
+      ]
+    }
+  ],
+  "runs": {
+    "good": {
+      "name": "good",
+      "schema_version": 3,
+      "tool_version": "0.1.0",
+      "command": [
+        "${WORK}/tools/bin/cmake",
+        "-S",
+        "${WORK}/pybind/consumer",
+        "-B",
+        "${WORK}/pybind/build"
+      ],
+      "cwd": "${WORK}/pybind",
+      "backend": "strace -- version 6.16",
+      "state": "completed",
+      "exit_code": 0,
+      "signal": null,
+      "collector_exit_code": 0,
+      "collector_signal": null,
+      "target_exit_raw": "+++ exited with 0 +++",
+      "completeness": "complete_for_supported_events",
+      "parsed_events": 3498,
+      "raw_lines": 3628,
+      "warnings": [],
+      "environment": {
+        "CMAKE_PREFIX_PATH": "${WORK}/pybind/venv/lib/python3.9/site-packages/pybind11/share/cmake/pybind11"
+      },
+      "record_cli_exit_code": 0,
+      "storage_integrity": {
+        "status": "verified",
+        "detail": "metadata and events match finalized byte counts, event count and SHA-256; raw logs are not checksummed"
+      }
+    },
+    "bad": {
+      "name": "bad",
+      "schema_version": 3,
+      "tool_version": "0.1.0",
+      "command": [
+        "${WORK}/tools/bin/cmake",
+        "-S",
+        "${WORK}/pybind/consumer",
+        "-B",
+        "${WORK}/pybind/build"
+      ],
+      "cwd": "${WORK}/pybind",
+      "backend": "strace -- version 6.16",
+      "state": "completed",
+      "exit_code": 1,
+      "signal": null,
+      "collector_exit_code": 1,
+      "collector_signal": null,
+      "target_exit_raw": "+++ exited with 1 +++",
+      "completeness": "complete_for_supported_events",
+      "parsed_events": 2322,
+      "raw_lines": 2409,
+      "warnings": [],
+      "environment": {
+        "CMAKE_PREFIX_PATH": null
+      },
+      "record_cli_exit_code": 1,
+      "storage_integrity": {
+        "status": "verified",
+        "detail": "metadata and events match finalized byte counts, event count and SHA-256; raw logs are not checksummed"
+      }
+    }
+  }
+}

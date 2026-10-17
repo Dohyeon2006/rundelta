@@ -1,0 +1,15 @@
+Run comparison: baseline-left → baseline-right
+Observed differences: yes
+Capture completeness: left=complete, right=complete
+Storage integrity: left=verified, right=verified
+Exit code: 1
+
+File access outcome changes
+  /baseline/input.txt (openat)
+  success → ENOENT
+  evidence: runs/abc001-101/raw/trace.log:1-1
+  evidence: runs/abc002-102/raw/trace.log:1-1
+
+Total observed changes: 1 (including folded details)
+
+Observed changes are investigation clues, not proof of a root cause.

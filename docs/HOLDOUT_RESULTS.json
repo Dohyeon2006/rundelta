@@ -1,0 +1,602 @@
+{
+  "plan": "HOLDOUT_PLAN.md",
+  "manifest": {
+    "registered_at": "2026-09-19T11:40:54.272517+00:00",
+    "workdir": "<REDACTED_WORKDIR>",
+    "sha256": {
+      "src/main.rs": "422ce94c7c5b0a0cf17795fa462cafd7c2ea929e5629ed5c7e3ffa4f386c03c4",
+      "src/cli.rs": "3d9f4ac1d35af9e587a54ad73c9cb1a20eb872dbdc9c8ad4e4ef5da6e15d5ba0",
+      "src/capture/mod.rs": "f1ff7e3d50ca0a89ac9fd6e93dd5f714be7730c7477f80c0ab968a7b890837e1",
+      "src/parse/mod.rs": "dced91a780995f58870827e4b47beec36f38fdb4282837e6a3bbeb549e9756c8",
+      "src/model/mod.rs": "c3f77e3ab735a7eea1ee4b852f354373c5a92a9edff4a3f732bd274c461d8b9e",
+      "src/store/mod.rs": "5a27684235afc4f0f24618418ca9c349a492e1eb752fcfcccc347f677821bf6e",
+      "src/diff/mod.rs": "588a9b3efb71f2992bccb61e1b8a4bb67bd2f2ddcc61d5a7be6afd7889d1d33c",
+      "src/report/mod.rs": "d08590d4e1afdc24aa1fe8adebc4e158de51ad312b820ac35328e4982ead3bbf",
+      "Cargo.toml": "f8e8661a59c9f3de3aaf583acd7bc134f26003ff833c2076377cea587f80f0c8",
+      "Cargo.lock": "8290794269e3c0a6a91a8f2e229513372043230955969d5d2ee4314e85297eee",
+      "docs/HOLDOUT_PLAN.md": "24fa97744e06c73725acea76e01691541938300fea166537fdbdbf5710cacd69",
+      "examples/holdout_cases.py": "d330d02bfc04972f947cb1f9c40331d88c1f2161f4b0c212a9baab8b8e275285"
+    }
+  },
+  "top5_hits": 4,
+  "localization_counts": {
+    "yes": 2,
+    "partial": 2,
+    "no": 1
+  },
+  "cases": [
+    {
+      "case": "openssl-trust",
+      "command": [
+        "openssl",
+        "verify",
+        "-no-CAfile",
+        "-no-CAstore",
+        "-CApath",
+        "trust",
+        "leaf.pem"
+      ],
+      "cwd": "<REDACTED_WORKDIR>",
+      "runs": {
+        "good": {
+          "id": "18d6b6099c753e4d-24843",
+          "exit_code": 0,
+          "signal": null,
+          "warnings": [],
+          "completeness": "complete_for_supported_events",
+          "parsed_events": 16
+        },
+        "repeat": {
+          "id": "18d6b6099e2cbec2-24851",
+          "exit_code": 0,
+          "signal": null,
+          "warnings": [],
+          "completeness": "complete_for_supported_events",
+          "parsed_events": 16
+        },
+        "bad": {
+          "id": "18d6b6099edd8a43-24859",
+          "exit_code": 2,
+          "signal": null,
+          "warnings": [],
+          "completeness": "complete_for_supported_events",
+          "parsed_events": 14
+        }
+      },
+      "key_clue_ranks": [
+        3
+      ],
+      "first_key_clue_rank": 3,
+      "top5_hit": true,
+      "total_changes": 3,
+      "control_changes": 0,
+      "reliability": {
+        "left": {
+          "capture": "complete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "complete",
+          "storage": "verified"
+        }
+      },
+      "diff_exit_code": 1,
+      "top5": [
+        {
+          "category": "Exit status",
+          "subject": "",
+          "detail_group": null,
+          "left": [
+            "code=Some(0), signal=None"
+          ],
+          "right": [
+            "code=Some(2), signal=None"
+          ],
+          "left_evidence": [],
+          "right_evidence": []
+        },
+        {
+          "category": "Removed file access",
+          "subject": "/etc/localtime (openat)",
+          "detail_group": null,
+          "left": [
+            "success"
+          ],
+          "right": [],
+          "left_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 15,
+              "end_line": 15
+            }
+          ],
+          "right_evidence": []
+        },
+        {
+          "category": "Removed file access",
+          "subject": "<REDACTED_PATH> (openat)",
+          "detail_group": null,
+          "left": [
+            "success"
+          ],
+          "right": [],
+          "left_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 14,
+              "end_line": 14
+            }
+          ],
+          "right_evidence": []
+        }
+      ],
+      "localization_assessment": "partial",
+      "localization_assessor": "agent analysis; no independent user trial",
+      "next_check": "检查 trust/a7943d2e.0 是否存在且指向正确 CA；报告只显示不再打开，不能确定是链接删除、不同链还是其他证书变化。",
+      "noise_omission_or_limit": "/etc/localtime 消失排在关键路径前；未记录失败 stat，缺少 ENOENT。"
+    },
+    {
+      "case": "python-shadow",
+      "command": [
+        "python3",
+        "-c",
+        "import json; print(json.dumps({\"build\": \"release\"}))"
+      ],
+      "cwd": "<REDACTED_WORKDIR>",
+      "runs": {
+        "good": {
+          "id": "18d6b6099fc89009-24871",
+          "exit_code": 0,
+          "signal": null,
+          "warnings": [],
+          "completeness": "complete_for_supported_events",
+          "parsed_events": 53
+        },
+        "repeat": {
+          "id": "18d6b609a1a121e9-24880",
+          "exit_code": 0,
+          "signal": null,
+          "warnings": [],
+          "completeness": "complete_for_supported_events",
+          "parsed_events": 53
+        },
+        "bad": {
+          "id": "18d6b609a33a65d5-24888",
+          "exit_code": 1,
+          "signal": null,
+          "warnings": [],
+          "completeness": "complete_for_supported_events",
+          "parsed_events": 90
+        }
+      },
+      "key_clue_ranks": [
+        2
+      ],
+      "first_key_clue_rank": 2,
+      "top5_hit": true,
+      "total_changes": 48,
+      "control_changes": 0,
+      "reliability": {
+        "left": {
+          "capture": "complete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "complete",
+          "storage": "verified"
+        }
+      },
+      "diff_exit_code": 1,
+      "top5": [
+        {
+          "category": "Exit status",
+          "subject": "",
+          "detail_group": null,
+          "left": [
+            "code=Some(0), signal=None"
+          ],
+          "right": [
+            "code=Some(1), signal=None"
+          ],
+          "left_evidence": [],
+          "right_evidence": []
+        },
+        {
+          "category": "New file access",
+          "subject": "<REDACTED_PATH> (openat)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 34,
+              "end_line": 34
+            }
+          ]
+        },
+        {
+          "category": "New file access",
+          "subject": "/lib64/libgcc_s.so.1 (openat)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 85,
+              "end_line": 85
+            }
+          ]
+        },
+        {
+          "category": "New file access",
+          "subject": "/lib64/libsystemd.so.0 (openat)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 84,
+              "end_line": 84
+            }
+          ]
+        },
+        {
+          "category": "New file access",
+          "subject": "/lib64/libuuid.so.1 (openat)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 45,
+              "end_line": 45
+            }
+          ]
+        }
+      ],
+      "localization_assessment": "yes",
+      "localization_assessor": "agent analysis; no independent user trial",
+      "next_check": "检查当前目录 json.py 与标准库模块重名；新本地模块成功打开直接给出可检查对象。",
+      "noise_omission_or_limit": "异常处理新增 libgcc_s/libsystemd/libuuid 等库挤占后续名次；不能从路径证明模块内容。"
+    },
+    {
+      "case": "tar-permission",
+      "command": [
+        "tar",
+        "-xf",
+        "source.tar",
+        "-C",
+        "output"
+      ],
+      "cwd": "<REDACTED_WORKDIR>",
+      "runs": {
+        "good": {
+          "id": "18d6b609a66bb75c-24903",
+          "exit_code": 0,
+          "signal": null,
+          "warnings": [],
+          "completeness": "complete_for_supported_events",
+          "parsed_events": 22
+        },
+        "repeat": {
+          "id": "18d6b609a77f6715-24919",
+          "exit_code": 0,
+          "signal": null,
+          "warnings": [],
+          "completeness": "complete_for_supported_events",
+          "parsed_events": 22
+        },
+        "bad": {
+          "id": "18d6b609a85915cc-24927",
+          "exit_code": 2,
+          "signal": null,
+          "warnings": [],
+          "completeness": "complete_for_supported_events",
+          "parsed_events": 22
+        }
+      },
+      "key_clue_ranks": [
+        2
+      ],
+      "first_key_clue_rank": 2,
+      "top5_hit": true,
+      "total_changes": 2,
+      "control_changes": 0,
+      "reliability": {
+        "left": {
+          "capture": "complete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "complete",
+          "storage": "verified"
+        }
+      },
+      "diff_exit_code": 1,
+      "top5": [
+        {
+          "category": "Exit status",
+          "subject": "",
+          "detail_group": null,
+          "left": [
+            "code=Some(0), signal=None"
+          ],
+          "right": [
+            "code=Some(2), signal=None"
+          ],
+          "left_evidence": [],
+          "right_evidence": []
+        },
+        {
+          "category": "File access outcome changes",
+          "subject": "<REDACTED_PATH> (openat)",
+          "detail_group": null,
+          "left": [
+            "success"
+          ],
+          "right": [
+            "EACCES"
+          ],
+          "left_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 21,
+              "end_line": 21
+            }
+          ],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 21,
+              "end_line": 21
+            }
+          ]
+        }
+      ],
+      "localization_assessment": "yes",
+      "localization_assessor": "agent analysis; no independent user trial",
+      "next_check": "检查 output/README.md 及父目录写入权限；success→EACCES 可定位具体写入失败对象。",
+      "noise_omission_or_limit": "不能单凭 EACCES 区分 mode、ACL 与 SELinux；实际 chmod 注入只用于验证真值。"
+    },
+    {
+      "case": "git-alternates",
+      "command": [
+        "git",
+        "show",
+        "HEAD:README.md"
+      ],
+      "cwd": "<REDACTED_WORKDIR>",
+      "runs": {
+        "good": {
+          "id": "18d6b609aa3c91cf-24946",
+          "exit_code": 0,
+          "signal": null,
+          "warnings": [],
+          "completeness": "complete_for_supported_events",
+          "parsed_events": 49
+        },
+        "repeat": {
+          "id": "18d6b609ab6522cb-24954",
+          "exit_code": 0,
+          "signal": null,
+          "warnings": [],
+          "completeness": "complete_for_supported_events",
+          "parsed_events": 49
+        },
+        "bad": {
+          "id": "18d6b609ac5d296e-24962",
+          "exit_code": 128,
+          "signal": null,
+          "warnings": [],
+          "completeness": "complete_for_supported_events",
+          "parsed_events": 40
+        }
+      },
+      "key_clue_ranks": [
+        2,
+        3,
+        4,
+        5
+      ],
+      "first_key_clue_rank": 2,
+      "top5_hit": true,
+      "total_changes": 17,
+      "control_changes": 0,
+      "reliability": {
+        "left": {
+          "capture": "complete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "complete",
+          "storage": "verified"
+        }
+      },
+      "diff_exit_code": 1,
+      "top5": [
+        {
+          "category": "Exit status",
+          "subject": "",
+          "detail_group": null,
+          "left": [
+            "code=Some(0), signal=None"
+          ],
+          "right": [
+            "code=Some(128), signal=None"
+          ],
+          "left_evidence": [],
+          "right_evidence": []
+        },
+        {
+          "category": "Removed file access",
+          "subject": "<REDACTED_PATH> (openat)",
+          "detail_group": null,
+          "left": [
+            "success"
+          ],
+          "right": [],
+          "left_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 35,
+              "end_line": 35
+            }
+          ],
+          "right_evidence": []
+        },
+        {
+          "category": "Removed file access",
+          "subject": "<REDACTED_PATH> (openat)",
+          "detail_group": null,
+          "left": [
+            "success"
+          ],
+          "right": [],
+          "left_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 37,
+              "end_line": 37
+            }
+          ],
+          "right_evidence": []
+        },
+        {
+          "category": "Removed file access",
+          "subject": "<REDACTED_PATH> (openat)",
+          "detail_group": null,
+          "left": [
+            "success"
+          ],
+          "right": [],
+          "left_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 45,
+              "end_line": 45
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 48,
+              "end_line": 48
+            }
+          ],
+          "right_evidence": []
+        },
+        {
+          "category": "Removed file access",
+          "subject": "<REDACTED_PATH> (openat)",
+          "detail_group": null,
+          "left": [
+            "success"
+          ],
+          "right": [],
+          "left_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 34,
+              "end_line": 34
+            }
+          ],
+          "right_evidence": []
+        }
+      ],
+      "localization_assessment": "partial",
+      "localization_assessor": "agent analysis; no independent user trial",
+      "next_check": "检查 donor/.git/objects 及克隆的 objects/info/alternates；报告指向供体对象库，但没有明确展示目录不存在。",
+      "noise_omission_or_limit": "多个对象消失重复占位；失败 stat 不在支持范围，缺少具体缺失结果，不能从成功访问消失推断唯一原因。"
+    },
+    {
+      "case": "checksum-content",
+      "command": [
+        "sha256sum",
+        "--check",
+        "SHA256SUMS"
+      ],
+      "cwd": "<REDACTED_WORKDIR>",
+      "runs": {
+        "good": {
+          "id": "18d6b609addc2d02-24975",
+          "exit_code": 0,
+          "signal": null,
+          "warnings": [],
+          "completeness": "complete_for_supported_events",
+          "parsed_events": 9
+        },
+        "repeat": {
+          "id": "18d6b609ae79c427-24983",
+          "exit_code": 0,
+          "signal": null,
+          "warnings": [],
+          "completeness": "complete_for_supported_events",
+          "parsed_events": 9
+        },
+        "bad": {
+          "id": "18d6b609af1902c7-24991",
+          "exit_code": 1,
+          "signal": null,
+          "warnings": [],
+          "completeness": "complete_for_supported_events",
+          "parsed_events": 9
+        }
+      },
+      "key_clue_ranks": [],
+      "first_key_clue_rank": null,
+      "top5_hit": false,
+      "total_changes": 1,
+      "control_changes": 0,
+      "reliability": {
+        "left": {
+          "capture": "complete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "complete",
+          "storage": "verified"
+        }
+      },
+      "diff_exit_code": 1,
+      "top5": [
+        {
+          "category": "Exit status",
+          "subject": "",
+          "detail_group": null,
+          "left": [
+            "code=Some(0), signal=None"
+          ],
+          "right": [
+            "code=Some(1), signal=None"
+          ],
+          "left_evidence": [],
+          "right_evidence": []
+        }
+      ],
+      "localization_assessment": "no",
+      "localization_assessor": "agent analysis; no independent user trial",
+      "next_check": "报告只有退出码变化，不能单独定位 source.tar 字节漂移；需另查校验工具输出。",
+      "noise_omission_or_limit": "路径和 open 成功结果不变；内容漂移是明确能力边界，不能把存储摘要等同于被测文件内容快照。"
+    }
+  ],
+  "_public_archive_derivative": {
+    "kind": "redacted_derivative",
+    "original_evidence": "retained in private archive",
+    "measurements": "historical; not rerun",
+    "scope": "only explicitly listed local paths redacted"
+  }
+}

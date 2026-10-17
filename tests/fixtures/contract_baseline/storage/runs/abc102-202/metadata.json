@@ -1,0 +1,26 @@
+{
+  "schema_version": 2,
+  "tool_version": "0.1.0-legacy",
+  "id": "abc102-202",
+  "name": "legacy-v2",
+  "command": [
+    "/usr/bin/baseline",
+    "--mode",
+    "fixed"
+  ],
+  "cwd": "/baseline",
+  "started": 4000,
+  "ended": 4010,
+  "backend": "strace legacy",
+  "state": "completed",
+  "exit_code": 0,
+  "signal": null,
+  "warnings": [],
+  "parsed_events": 1,
+  "raw_lines": 1,
+  "environment": {
+    "BASELINE_MODE": "fixed",
+    "OPTIONAL": null
+  },
+  "completeness": "complete_for_supported_events"
+}

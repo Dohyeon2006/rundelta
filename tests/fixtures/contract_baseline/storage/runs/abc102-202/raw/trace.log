@@ -1,0 +1,1 @@
+202 openat(AT_FDCWD, "/baseline/input.txt", O_RDONLY) = 3

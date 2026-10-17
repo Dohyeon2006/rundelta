@@ -1,0 +1,244 @@
+{
+  "workdir": "<REDACTED_WORKDIR>",
+  "method": "5 real-tool controlled fault reproductions; three real records per case; existing report order unchanged; no --env answer injection; symptoms and reliability notices do not count as diagnostic hits",
+  "strict_top5_hits": 3,
+  "cases": [
+    {
+      "case": "python-venv",
+      "description": "PATH selects an isolated Python venv that cannot import the installed pycparser dependency",
+      "first_useful_rank": 3,
+      "top5_hit": true,
+      "total_changes": 85,
+      "control_changes": 0,
+      "reliability": {
+        "left": {
+          "capture": "incomplete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "complete",
+          "storage": "verified"
+        }
+      },
+      "diff_exit_code": 3,
+      "false_positive": "前五条未确认事实误报。",
+      "noise": "cpp 的 PATH 失败探测、停止运行后不再访问的模块与编译器路径；总共 85 条变化。",
+      "omission": "正常运行中的 cpp/cc1 执行与进程创建部分被对齐空格解析遗漏。",
+      "unexplained": "仅由路径无法证明 pyvenv.cfg 的 system-site-packages 内容；不能区分依赖未安装与依赖对当前环境不可见。",
+      "runs": {
+        "good": {
+          "id": "18d6afea21c4ff25-8091",
+          "exit_code": 0,
+          "warnings": 4,
+          "events": 184,
+          "unresolved_relative_paths": 0
+        },
+        "repeat": {
+          "id": "18d6afea25544df4-8101",
+          "exit_code": 0,
+          "warnings": 4,
+          "events": 184,
+          "unresolved_relative_paths": 0
+        },
+        "bad": {
+          "id": "18d6afea287baece-8111",
+          "exit_code": 1,
+          "warnings": 0,
+          "events": 69,
+          "unresolved_relative_paths": 0
+        }
+      }
+    },
+    {
+      "case": "pkg-config",
+      "description": "PKG_CONFIG_LIBDIR replaces the system search path; the installed libcrypt package becomes undiscoverable",
+      "first_useful_rank": 2,
+      "top5_hit": true,
+      "total_changes": 7,
+      "control_changes": 0,
+      "reliability": {
+        "left": {
+          "capture": "complete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "complete",
+          "storage": "verified"
+        }
+      },
+      "diff_exit_code": 1,
+      "false_positive": "前五条未确认事实误报。",
+      "noise": "libcrypt-uninstalled.pc 是正常回退探测，其 ENOENT 本身不等于故障。",
+      "omission": "未选择记录环境变量，因此不能直接指出 PKG_CONFIG_LIBDIR 的值；这是本次配置的已知边界。",
+      "unexplained": "单看文件访问不能证明搜索路径变化来自环境变量而非其他配置。",
+      "runs": {
+        "good": {
+          "id": "18d6afea2c0236d8-8125",
+          "exit_code": 0,
+          "warnings": 0,
+          "events": 89,
+          "unresolved_relative_paths": 0
+        },
+        "repeat": {
+          "id": "18d6afea2d499aec-8134",
+          "exit_code": 0,
+          "warnings": 0,
+          "events": 89,
+          "unresolved_relative_paths": 0
+        },
+        "bad": {
+          "id": "18d6afea2eae7daa-8143",
+          "exit_code": 1,
+          "warnings": 0,
+          "events": 89,
+          "unresolved_relative_paths": 0
+        }
+      }
+    },
+    {
+      "case": "git-identity",
+      "description": "Git commit fails after the only configured author identity file disappears",
+      "first_useful_rank": 4,
+      "top5_hit": true,
+      "total_changes": 42,
+      "control_changes": 9,
+      "reliability": {
+        "left": {
+          "capture": "incomplete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "complete",
+          "storage": "verified"
+        }
+      },
+      "diff_exit_code": 3,
+      "false_positive": "未确认文件访问事实误报；正常对照的采集警告数变化反映解析调度敏感性，不计为身份环境漂移。",
+      "noise": "正常对照 9 条：8 条随机 Git 对象临时路径，1 条采集完整性计数变化。坏运行中缺少 hooks、对象写入等属于提交提前中止的后果。",
+      "omission": "部分 openat 的 resumed 对齐输出未解析；元数据明确 partial。",
+      "unexplained": "报告不采集 .gitconfig 内容，不能仅凭缺文件说明具体缺少 user.email；由 Git 的原始 stderr 和受控注入验证。",
+      "runs": {
+        "good": {
+          "id": "18d6afea30d02f58-8157",
+          "exit_code": 0,
+          "warnings": 3,
+          "events": 130,
+          "unresolved_relative_paths": 0
+        },
+        "repeat": {
+          "id": "18d6afea3280d99a-8168",
+          "exit_code": 0,
+          "warnings": 2,
+          "events": 131,
+          "unresolved_relative_paths": 0
+        },
+        "bad": {
+          "id": "18d6afea33e88fd3-8179",
+          "exit_code": 128,
+          "warnings": 0,
+          "events": 36,
+          "unresolved_relative_paths": 0
+        }
+      }
+    },
+    {
+      "case": "gcc-header",
+      "description": "The configured GCC compilation of real strace.c fails because its required defs.h was removed",
+      "first_useful_rank": 127,
+      "top5_hit": false,
+      "total_changes": 1238,
+      "control_changes": 2,
+      "reliability": {
+        "left": {
+          "capture": "incomplete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "incomplete",
+          "storage": "verified"
+        }
+      },
+      "diff_exit_code": 3,
+      "false_positive": "尚未确认前五条事实错误；显示的 ENOENT 消失是实际未再进行的头文件探测。",
+      "noise": "按路径字典序将 ../bundled 下的大量探测排到前面；正常对照 2 条均为随机 /tmp/cc*.s。",
+      "omission": "cc1/as 与 clone3 的部分成功事件被对齐空格解析遗漏；不是 defs.h 路径丢失。",
+      "unexplained": "没有源码依赖图/内容快照，不能自动证明哪个头文件使用是故障原因；GCC stderr 与单一文件移走验证了此例。",
+      "runs": {
+        "good": {
+          "id": "18d6afea61d7f87c-8204",
+          "exit_code": 0,
+          "warnings": 4,
+          "events": 1370,
+          "unresolved_relative_paths": 0
+        },
+        "repeat": {
+          "id": "18d6afea8486f033-8214",
+          "exit_code": 0,
+          "warnings": 4,
+          "events": 1370,
+          "unresolved_relative_paths": 0
+        },
+        "bad": {
+          "id": "18d6afeaa167ba3f-8224",
+          "exit_code": 1,
+          "warnings": 2,
+          "events": 83,
+          "unresolved_relative_paths": 0
+        }
+      },
+      "decisive_rank": 705
+    },
+    {
+      "case": "cargo-linker",
+      "description": "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER points to a nonexistent linker during an actual offline build of RunDelta",
+      "first_useful_rank": null,
+      "top5_hit": false,
+      "total_changes": 2004,
+      "control_changes": 1600,
+      "reliability": {
+        "left": {
+          "capture": "incomplete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "incomplete",
+          "storage": "verified"
+        }
+      },
+      "diff_exit_code": 3,
+      "false_positive": "正常对照第 2 条 serde_json build-script-build 新增属于已确认的事实误报：两次原始日志均成功执行，只有一次进入标准化事件。",
+      "noise": "正常对照 1600 条：1598 条新增/消失文件访问、1 条伪执行差异、1 条解析完整性计数差异；主要是 rustc 随机临时目录和构建产物路径。",
+      "omission": "missing-linker 的 execve ENOENT 已在 events.jsonl 中，但 diff::aggregate 明确排除失败 exec；父 rustc argv 的 linker 参数也不参与跨运行比较。",
+      "unexplained": "前五条 rust-lld/构建脚本消失只能说明构建链没有走到那里，不能定位错误链接器路径；本例没有靠匹配 PID 得出根因。",
+      "runs": {
+        "good": {
+          "id": "18d6afeaaa6ea750-8247",
+          "exit_code": 0,
+          "warnings": 112,
+          "events": 14530,
+          "unresolved_relative_paths": 0
+        },
+        "repeat": {
+          "id": "18d6afeda79a4f46-9311",
+          "exit_code": 0,
+          "warnings": 102,
+          "events": 14533,
+          "unresolved_relative_paths": 0
+        },
+        "bad": {
+          "id": "18d6aff066739836-10342",
+          "exit_code": 101,
+          "warnings": 14,
+          "events": 763,
+          "unresolved_relative_paths": 0
+        }
+      }
+    }
+  ],
+  "_public_archive_derivative": {
+    "kind": "redacted_derivative",
+    "original_evidence": "retained in private archive",
+    "measurements": "historical; not rerun",
+    "scope": "only explicitly listed local paths redacted"
+  }
+}

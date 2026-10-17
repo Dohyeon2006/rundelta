@@ -4,7 +4,8 @@
 --synthetic needs Python 3 and the Linux process APIs used by RunDelta, but no
 installed strace or C compiler. Its explicit test backend never executes a
 target. --real additionally needs cc and a compatible strace and exercises real
-capture. Neither mode imports private scripts or consumes saved run evidence.
+capture. Its finalization matrix explicitly reuses the public runtime_boundary
+FaultBroker test; neither mode consumes private scripts or saved run evidence.
 """
 import argparse
 import hashlib
@@ -176,16 +177,24 @@ class SyntheticCLI(SyntheticEnvironment):
         self.assertEqual(event["evidence"]["line"], 2)
         self.assertTrue(run["metadata"]["warnings"])
 
-    def test_ignored_sigchld_rejects_before_backend_spawn(self):
+    def test_ignored_sigchld_allows_supervised_capture(self):
         launcher = (sys.executable, "-c",
                     "import os,signal,sys; "
                     "signal.signal(signal.SIGCHLD, signal.SIG_IGN); "
                     "os.execv(sys.argv[1], sys.argv[1:])")
         recorded = self.record("ignored-sigchld", launcher=launcher)
-        self.assertEqual(recorded.returncode, 2, recorded.stderr)
-        self.assertIn(b"SIGCHLD disposition", recorded.stderr)
-        self.assertFalse(self.marker.exists(), "even the version probe must not start")
-        self.assertFalse(any((self.store / "runs").iterdir()))
+        self.assertEqual(recorded.returncode, 0, recorded.stderr)
+        self.assertEqual(self.marker.read_text(encoding="ascii"), "backend started")
+        run = self.show("ignored-sigchld")
+        self.assertEqual(run["metadata"]["state"], "completed")
+        self.assertEqual(run["metadata"]["completeness"], "complete_for_supported_events")
+        self.assertEqual((run["metadata"]["exit_code"], run["metadata"]["signal"]), (0, None))
+        self.assertEqual(run["metadata"]["warnings"], [])
+        self.assertEqual(run["storage_integrity"]["status"], "verified")
+        self.assertTrue(any(event["operation"] == "openat" for event in run["events"]))
+        # This synthetic backend proves startup and finalized capture. The real
+        # target's inherited SIG_IGN is covered separately by RuntimeBoundary.
+        # test_ignored_sigchld_is_normalized_in_owner_and_retained_for_target.
 
     def populate_records(self):
         recorded = self.record("label-000")
@@ -373,98 +382,17 @@ int main(int argc, char **argv) {
             self.assertNotIn(b"panicked", result.stderr)
 
 
-class FinalizationCLI(SyntheticEnvironment):
-    """Inject signals only after capture facts freeze; never launch a target."""
-
-    def setUp(self):
-        super().setUp()
-        self.barrier = self.work / "finalization-barrier.so"
-        fixture = Path(__file__).resolve().parent / "fixtures/finalization_barrier.c"
-        subprocess.run(["cc", "-Wall", "-Wextra", "-Werror", "-O2", "-fPIC", "-shared",
-                        str(fixture), "-ldl", "-o", str(self.barrier)],
-                       check=True, capture_output=True, timeout=60)
-
-    def finalization_case(self, mode, number, fail):
-        case = self.work / f"case-{mode}-{number}-{fail}"
-        case.mkdir()
-        self.store = case / "records"
-        ready, release = case / "ready", case / "release"
-        os.mkfifo(release, 0o600)
-        gate = os.open(release, os.O_RDWR | os.O_NONBLOCK | os.O_CLOEXEC)
-        env = dict(self.env, LD_PRELOAD=str(self.barrier),
-                   RF_FINALIZE_READY=str(ready), RF_FINALIZE_RELEASE=str(release))
-        env.pop("RF_FINALIZE_FAIL", None)
-        if fail:
-            env["RF_FINALIZE_FAIL"] = "1"
-        # Python normally installs an INT handler. Explicitly set the inherited
-        # dispositions and mask before exec; no native launcher is required.
-        launcher = (
-            "import os,signal,sys; "
-            "controls=(signal.SIGHUP,signal.SIGINT,signal.SIGTERM); "
-            "[signal.signal(s,signal.SIG_DFL) for s in controls]; "
-            "signal.pthread_sigmask(signal.SIG_UNBLOCK,controls); "
-            "mode=sys.argv[1]; number=int(sys.argv[2]); "
-            "signal.signal(number,signal.SIG_IGN) if mode=='ignored' else None; "
-            "signal.pthread_sigmask(signal.SIG_BLOCK,[number]) if mode=='blocked' else None; "
-            "os.execv(sys.argv[3],sys.argv[3:])"
-        )
-        process, pidfd = None, None
-        try:
-            process = subprocess.Popen(
-                [sys.executable, "-c", launcher, mode, str(number or 0), self.binary,
-                 "--storage", str(self.store), "record", "late", "--", "synthetic-target"],
-                cwd=case, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            pidfd = os.pidfd_open(process.pid)
-            deadline = time.monotonic() + 10
-            while not ready.exists():
-                self.assertIsNone(process.poll(), "recorder exited before publication")
-                self.assertLess(time.monotonic(), deadline, "publication barrier timeout")
-                time.sleep(0.005)
-            if number is not None:
-                signal.pidfd_send_signal(pidfd, number)
-                status = dict(line.split(":", 1) for line in
-                              Path(f"/proc/{process.pid}/status").read_text().splitlines())
-                bit = 1 << (number - 1)
-                self.assertTrue(int(status["SigBlk"], 16) & bit)
-                self.assertTrue((int(status["SigPnd"], 16) | int(status["ShdPnd"], 16)) & bit)
-            os.write(gate, b"x")
-            stdout, stderr = process.communicate(timeout=10)
-            expected = -number if number is not None and mode == "default" else (2 if fail else 0)
-            self.assertEqual(process.returncode, expected, (stdout, stderr))
-        finally:
-            if process is not None and process.poll() is None:
-                # Only this owned recorder is signalled; no numeric-PID fallback.
-                # The finite backend neither executes a target nor forks children.
-                if pidfd is not None:
-                    try:
-                        signal.pidfd_send_signal(pidfd, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
-                else:
-                    os.write(gate, b"x")
-                process.communicate(timeout=5)
-            if pidfd is not None:
-                os.close(pidfd)
-            os.close(gate)
-        run = self.show("late")
-        self.assertEqual(run["storage_integrity"]["status"], "unfinalized" if fail else "verified")
-        self.assertEqual(run["metadata"]["state"], "completed")
-        self.assertEqual((run["metadata"]["exit_code"], run["metadata"]["signal"]), (0, None))
-        self.assertEqual(run["metadata"]["warnings"], [])
-        record = self.store / "runs" / run["metadata"]["id"]
-        self.assertEqual((record / "finalized.json").exists(), not fail)
-        self.assertEqual(list(record.glob(".rundelta-tmp-*")), [])
-        deleted = self.call("delete", "late")
-        self.assertEqual(deleted.returncode, 0, "recorder retained its storage lock")
-
-    def test_late_signals_preserve_dispositions_and_finalization_facts(self):
-        for fail in (False, True):
-            with self.subTest(signal="none", fail=fail):
-                self.finalization_case("default", None, fail)
-            for number in (signal.SIGHUP, signal.SIGINT, signal.SIGTERM):
-                for mode in ("default", "ignored", "blocked"):
-                    with self.subTest(signal=number, mode=mode, fail=fail):
-                        self.finalization_case(mode, number, fail)
+# The former LD_PRELOAD renameat barrier cannot cross the clean owner exec.
+# Preserve its entire 20-case matrix through the existing external syscall
+# broker test, which waits for a real finalization barrier before signalling.
+# For each success/failure outcome: no signal, then HUP/INT/TERM crossed with
+# default/ignored/blocked. The shared test checks pending/blocked signals, exit
+# status, verified/unfinalized storage, target facts, marker presence, scratch
+# cleanup and delete/lock release. The suite registers only this exact method.
+FINALIZATION_MATRIX = (
+    "runtime_boundary.RuntimeBoundary."
+    "test_finalization_late_signals_keep_original_dispositions"
+)
 
 
 if __name__ == "__main__":
@@ -476,7 +404,7 @@ if __name__ == "__main__":
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(
         SyntheticCLI if selected.synthetic else PublicCLI)
     if selected.real:
-        suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(FinalizationCLI))
+        suite.addTests(unittest.defaultTestLoader.loadTestsFromName(FINALIZATION_MATRIX))
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     passed = result.wasSuccessful() and result.testsRun > 0 and not (
         result.skipped or result.expectedFailures)

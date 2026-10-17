@@ -1,0 +1,177 @@
+{
+  "schema_version": 1,
+  "checked_date": "2026-09-20",
+  "rundelta_commit": "ffff712892f70413bd58482b775ba0d6d18bd07c",
+  "rundelta_binary_sha256": "40579b5974b48d5507e0104c72a84d439cf30242110b9c8fceb7c947415bf566",
+  "strace_version": "6.16",
+  "strace_binary_sha256": "d77eb7f170686240814ce7b3e709ca1e5d230d5fe1a4b25d4e61762e83f9c76c",
+  "environment": {
+    "os": "Linux",
+    "kernel": "7.2.5-200.fc44.x86_64",
+    "architecture": "x86_64",
+    "python": "3.12.11",
+    "pip": "24.2",
+    "cmake_good": "3.31.6",
+    "cmake_bad": "4.0.3",
+    "gcc": "16.2.1"
+  },
+  "downloads": {
+    "pip-24.2": {
+      "filename": "pip-24.2-py3-none-any.whl",
+      "sha256": "2cd581cf58ab7fcfca4ce8efa6dcacd0de5bf8d0a3eb9ec927e07405f4d9e2a2"
+    },
+    "cmake-3.31.6": {
+      "filename": "cmake-3.31.6-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "sha256": "1c8b05df0602365da91ee6a3336fe57525b137706c4ab5675498f662ae1dbcec"
+    },
+    "cmake-4.0.3": {
+      "filename": "cmake-4.0.3-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "sha256": "d840e780c48c5df1330879d50615176896e8e6eee554507d21ce8e2f1a5f0ff8"
+    },
+    "expat-sys-2.1.6": {
+      "url": "https://static.crates.io/crates/expat-sys/expat-sys-2.1.6.crate",
+      "sha256": "658f19728920138342f68408b7cf7644d90d4784353d8ebc32e7e8663dbe45fa"
+    }
+  },
+  "case_sha256": {
+    "pip-12996": "d46bc440f649413d3dc61362465d2b4c9b82f069dd26619fab1247b640b5cbb9",
+    "bracket-lib-376": "87c9eb9fa22ffeecbef55188f7a53b2d4e0dd82660c9830189eb8bbc02ce3b27"
+  },
+  "source_info": {
+    "expat_sys_version": "2.1.6",
+    "expat_cmake_sha256": "64d2ad1dce16d9eea2601334f0816a86eddbbe92be6ee527d7c6aa0dddff0d00",
+    "expat_license": "MIT; CMakeLists also carries its original BSD build-system notice",
+    "third_party_sources_modified": false
+  },
+  "issue_checks": {
+    "selected": [
+      {
+        "url": "https://github.com/pypa/pip/issues/12996",
+        "title": "pip user config is invisible when PIP_CONFIG_FILE is set",
+        "state": "open",
+        "labels": [
+          "type: bug",
+          "S: needs triage"
+        ],
+        "body_sha256": "77880779c0aec69c2665a585aef70c30afcf11f33627bb2229158caea00a09b9"
+      },
+      {
+        "url": "https://github.com/amethyst/bracket-lib/issues/376",
+        "title": "CMake error when compiling hello_bterm",
+        "state": "open",
+        "labels": [],
+        "body_sha256": "f4401a0a9d37602eb7ea5c70bc80d745db496742347ac382d4645361083e3f18"
+      }
+    ],
+    "screened": [
+      {
+        "url": "https://github.com/astral-sh/uv/issues/21047",
+        "title": "Interpreter discovery aborts on a PATH candidate that fails to execute (pyenv shim, exit 127) instead of skipping it",
+        "state": "open",
+        "labels": [
+          "needs-mre"
+        ]
+      },
+      {
+        "url": "https://github.com/rust-lang/cargo/issues/4350",
+        "title": "cargo install fails with tmpdir noexec",
+        "state": "open",
+        "labels": [
+          "A-diagnostics",
+          "Command-install",
+          "S-needs-design"
+        ]
+      },
+      {
+        "url": "https://github.com/mesonbuild/meson/issues/15740",
+        "title": "Cython sanity check uses PKG_CONFIG_PATH while python.find_installation().dependency() does not",
+        "state": "open",
+        "labels": [
+          "regression",
+          "language:cython"
+        ]
+      }
+    ]
+  },
+  "linked_pr_search": "Both selected issues returned by public is:issue is:open -linked:pr search; no claim about unlinked or unindexed fixes.",
+  "public_script_replay": {
+    "date": "2026-09-20",
+    "preparation": "default script, independent new workspace; no prepared-work",
+    "collection_exit_code": 0,
+    "analysis_exit_code": 0,
+    "records": 8,
+    "collection_json_sha256": "a6d13902d30faf049d4216a3f40c62a3a86a4b2383b8985926815fc4e381b5bf",
+    "cases": {
+      "pip-12996": {
+        "events_by_phase": {
+          "good": 491,
+          "repeat": 491,
+          "bad": 490,
+          "bad-repeat": 490
+        },
+        "changes_by_comparison": {
+          "control": 0,
+          "comparison": 3,
+          "bad-control": 0
+        },
+        "diff_exits": {
+          "control": 0,
+          "comparison": 1,
+          "bad-control": 0
+        },
+        "clue_ranks": [
+          {
+            "name": "override_config_opened",
+            "rank": 2,
+            "required": true
+          },
+          {
+            "name": "user_config_no_longer_observed",
+            "rank": 3,
+            "required": true
+          }
+        ],
+        "full_json_sha256": {
+          "control": "234686e28b0b1720a0abe90c5bf7065cb40a491312e87ca797ee5e82ce8530d6",
+          "comparison": "e112cb1c26539ae103b07fabc81a912edeed89784d341451f9ffeb6e1d11ea56",
+          "bad-control": "69dfcd4aa94401372c7b7f80054079d28a38032fabd63f7f7f557afa58b4ad8a"
+        }
+      },
+      "bracket-lib-376": {
+        "events_by_phase": {
+          "good": 16188,
+          "repeat": 16188,
+          "bad": 2560,
+          "bad-repeat": 2560
+        },
+        "changes_by_comparison": {
+          "control": 2262,
+          "comparison": 2072,
+          "bad-control": 242
+        },
+        "diff_exits": {
+          "control": 3,
+          "comparison": 3,
+          "bad-control": 3
+        },
+        "clue_ranks": [
+          {
+            "name": "new_cmake_executable",
+            "rank": 3,
+            "required": true
+          },
+          {
+            "name": "old_cmake_executable",
+            "rank": 352,
+            "required": false
+          }
+        ],
+        "full_json_sha256": {
+          "control": "9ec57c3c06cdca5e6a6a52daa014f1f653846a54ac06e6de5b9ef0d651bede17",
+          "comparison": "a662f57b273cefbe1b7ab40891b779f37e82b59d9a7ab149832e546a523d2b0e",
+          "bad-control": "0ac1342ca401058f28281cccd0065f96b3fd0c3ddc1fee942fcc56611e597b94"
+        }
+      }
+    }
+  }
+}

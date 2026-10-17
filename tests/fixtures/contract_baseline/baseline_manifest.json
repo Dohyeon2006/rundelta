@@ -1,0 +1,15 @@
+{
+  "review_baseline_commit": "966fe1432d3053e8e66f24d423cc8c338ca7e543",
+  "algorithm": "sha256",
+  "source_hashes": {
+    "src/capture/mod.rs": "f4e802d5b629f764d02f5505ce857a6ba15f17b42d545d7d5fe933fcd2a3472a",
+    "src/cli.rs": "3d9f4ac1d35af9e587a54ad73c9cb1a20eb872dbdc9c8ad4e4ef5da6e15d5ba0",
+    "src/diff/mod.rs": "588a9b3efb71f2992bccb61e1b8a4bb67bd2f2ddcc61d5a7be6afd7889d1d33c",
+    "src/main.rs": "51f9013edb1386d57588d2b580c8ab317406f57027b3751e14b3749d0d794a1d",
+    "src/model/mod.rs": "abcdc1943dde65eb5156b7088f2c443fb2aaf4a3e25c41c6424aaa3ffdb4cc2e",
+    "src/parse/fs_tests.rs": "936b8638bc9ba58fc92d386f52f339a8c5ab0dd71f646a91f1f5d47bc1a34e34",
+    "src/parse/mod.rs": "23df1cd30b4c443f6471be3a88bd1afe4aedb53ac6d67cfc76fe1c62bc1ed75f",
+    "src/report/mod.rs": "3872fc24d6762a3a62e2c5c6584b1a4bc698f520b7bac3f73ce1f9314b36ae38",
+    "src/store/mod.rs": "8b2f203c0c36f672d478c98a5edc27826c88f2247bf57b95835ed110e786daf4"
+  }
+}

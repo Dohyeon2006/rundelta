@@ -1,0 +1,143 @@
+{
+  "key_clues": [
+    {
+      "name": "new_cmake_executable",
+      "rank": 3,
+      "required": true,
+      "observations": [
+        {
+          "side": "right",
+          "role": "root",
+          "event": {
+            "kind": "exec",
+            "operation": "execve",
+            "path": "${WORK}/tools/cmake-4.0.3/lib/python3.12/site-packages/cmake/data/bin/cmake",
+            "outcome": "success",
+            "context_uncertain": false,
+            "evidence": {
+              "file": "raw/trace.log",
+              "line": 1,
+              "end_line": 1
+            }
+          },
+          "raw_semantics_verified": true
+        },
+        {
+          "side": "right",
+          "role": "descendant",
+          "event": {
+            "kind": "exec",
+            "operation": "execve",
+            "path": "${WORK}/tools/cmake-4.0.3/lib/python3.12/site-packages/cmake/data/bin/cmake",
+            "outcome": "success",
+            "context_uncertain": false,
+            "evidence": {
+              "file": "raw/trace.log",
+              "line": 1501,
+              "end_line": 1501
+            }
+          },
+          "raw_semantics_verified": true
+        },
+        {
+          "side": "right",
+          "role": "descendant",
+          "event": {
+            "kind": "exec",
+            "operation": "execve",
+            "path": "${WORK}/tools/cmake-4.0.3/lib/python3.12/site-packages/cmake/data/bin/cmake",
+            "outcome": "success",
+            "context_uncertain": false,
+            "evidence": {
+              "file": "raw/trace.log",
+              "line": 1549,
+              "end_line": 1549
+            }
+          },
+          "raw_semantics_verified": true
+        }
+      ]
+    },
+    {
+      "name": "old_cmake_executable",
+      "rank": 352,
+      "required": false,
+      "observations": [
+        {
+          "side": "left",
+          "role": "root",
+          "event": {
+            "kind": "exec",
+            "operation": "execve",
+            "path": "${WORK}/tools/cmake-3.31.6/lib/python3.12/site-packages/cmake/data/bin/cmake",
+            "outcome": "success",
+            "context_uncertain": false,
+            "evidence": {
+              "file": "raw/trace.log",
+              "line": 1,
+              "end_line": 1
+            }
+          },
+          "raw_semantics_verified": true
+        },
+        {
+          "side": "left",
+          "role": "descendant",
+          "event": {
+            "kind": "exec",
+            "operation": "execve",
+            "path": "${WORK}/tools/cmake-3.31.6/lib/python3.12/site-packages/cmake/data/bin/cmake",
+            "outcome": "success",
+            "context_uncertain": false,
+            "evidence": {
+              "file": "raw/trace.log",
+              "line": 1389,
+              "end_line": 1389
+            }
+          },
+          "raw_semantics_verified": true
+        },
+        {
+          "side": "left",
+          "role": "descendant",
+          "event": {
+            "kind": "exec",
+            "operation": "execve",
+            "path": "${WORK}/tools/cmake-3.31.6/lib/python3.12/site-packages/cmake/data/bin/cmake",
+            "outcome": "success",
+            "context_uncertain": false,
+            "evidence": {
+              "file": "raw/trace.log",
+              "line": 1438,
+              "end_line": 1438
+            }
+          },
+          "raw_semantics_verified": true
+        }
+      ]
+    }
+  ],
+  "other_observations": [
+    {
+      "note": "Successful system assembler executions also observed; a preceding PATH ENOENT is not proof the assembler is missing.",
+      "success_count": 4,
+      "evidence": [
+        {
+          "file": "raw/trace.log",
+          "line": 359,
+          "end_line": 361
+        },
+        {
+          "file": "raw/trace.log",
+          "line": 853,
+          "end_line": 855
+        },
+        {
+          "file": "raw/trace.log",
+          "line": 1611,
+          "end_line": 1613
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "run_id": "abc001-101",
+  "event_count": 1,
+  "events": {
+    "bytes": 255,
+    "sha256": "d15eac814b39ce3ab4026716092668e591b3dfdc70826567db4756187f3490f3"
+  },
+  "metadata": {
+    "bytes": 618,
+    "sha256": "487581e6c0a95d9ad61619bf86b08fa88bb4a083480499aacbcecadd2d3f20df"
+  }
+}

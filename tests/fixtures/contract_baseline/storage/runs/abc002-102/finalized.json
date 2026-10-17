@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "run_id": "abc002-102",
+  "event_count": 1,
+  "events": {
+    "bytes": 254,
+    "sha256": "c1e73cf245fcf9f35ab7d643ce9712a1982491148dd9350327fb23c0f0a19a65"
+  },
+  "metadata": {
+    "bytes": 619,
+    "sha256": "0d2fab9ff5436e8c43958c53c54078bfc0d18614aaf773ae5f90103d8c12a3d0"
+  }
+}

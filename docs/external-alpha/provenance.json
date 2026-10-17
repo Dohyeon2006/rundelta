@@ -1,0 +1,41 @@
+{
+  "checked_date": "2026-09-20",
+  "rundelta_commit": "dcbe7e36c26310dd54281a50a184653ca0984c48",
+  "rundelta_binary_sha256": "3c9f77cab63e543dc78a8df2c6b70b914c4d7ef70557ffa2787d7b0044679a66",
+  "strace_binary_sha256": "d77eb7f170686240814ce7b3e709ca1e5d230d5fe1a4b25d4e61762e83f9c76c",
+  "source_commits": {
+    "pybind": "f7b499615e14d70ab098a20deb0cdb3889998a1a",
+    "meson": "626d1e26325195f9cfdb288d7e413157b4f8bcb4",
+    "spades": "38af83de44403f833a32073fd47ba469d998efd1"
+  },
+  "downloads": {
+    "meson.zip": {
+      "url": "https://github.com/user-attachments/files/31346396/meson-cargo-path-dep-reproducer.zip",
+      "sha256": "29008004c67f92d9b3708d5251ac2740a471065d7ea46ae442b36c26d5efb017"
+    },
+    "spades.tar.gz": {
+      "url": "https://github.com/ablab/spades/releases/download/v4.0.0/SPAdes-4.0.0-Linux.tar.gz",
+      "sha256": "5c3b45e75b6fd41d3f75c1795614f67b6e6715df5b416aa942f232e53add2b92"
+    },
+    "libcrypt.deb": {
+      "url": "https://deb.debian.org/debian/pool/main/libx/libxcrypt/libcrypt1_4.4.33-2_amd64.deb",
+      "sha256": "f5f60a5cdfd4e4eaa9438ade5078a57741a7a78d659fcb0c701204f523e8bd29"
+    }
+  },
+  "environment": {
+    "platform": "Linux x86_64, Fedora 44",
+    "kernel": "7.2.5-200.fc44.x86_64",
+    "glibc": "2.43",
+    "gcc": "16.2.1",
+    "cargo": "1.98.1",
+    "rustc": "1.98.1",
+    "host_python": "3.14.7",
+    "pybind_python": "3.9.25",
+    "spades_python": "3.10.12",
+    "spades_alternative_python": "3.10.19",
+    "cmake_pypi": "3.21.1.post1 (CMake 3.21.1)",
+    "ninja": "1.13.2",
+    "uv": "0.12.17",
+    "strace": "6.16"
+  }
+}

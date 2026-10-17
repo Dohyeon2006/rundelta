@@ -1,0 +1,24 @@
+{
+  "schema_version": 4,
+  "observed_differences": null,
+  "reliability": {
+    "left": {
+      "capture": "unknown",
+      "storage": "unavailable"
+    },
+    "right": {
+      "capture": "complete",
+      "storage": "verified"
+    }
+  },
+  "exit_code": 2,
+  "errors": [
+    "left: record \"missing-record\": expected one safe ID/label match, found 0; unknown labels require an exact recognizable directory ID; unsafe entries cannot be selected"
+  ],
+  "left": "missing-record",
+  "right": "baseline-left",
+  "left_id": "",
+  "right_id": "",
+  "changes": [],
+  "warnings": []
+}

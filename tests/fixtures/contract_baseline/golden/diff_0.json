@@ -1,0 +1,22 @@
+{
+  "schema_version": 4,
+  "observed_differences": false,
+  "reliability": {
+    "left": {
+      "capture": "complete",
+      "storage": "verified"
+    },
+    "right": {
+      "capture": "complete",
+      "storage": "verified"
+    }
+  },
+  "exit_code": 0,
+  "errors": [],
+  "left": "baseline-left",
+  "right": "baseline-left",
+  "left_id": "abc001-101",
+  "right_id": "abc001-101",
+  "changes": [],
+  "warnings": []
+}

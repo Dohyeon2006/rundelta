@@ -1,0 +1,321 @@
+{
+  "schema_version": 4,
+  "observed_differences": true,
+  "reliability": {
+    "left": {
+      "capture": "incomplete",
+      "storage": "verified"
+    },
+    "right": {
+      "capture": "incomplete",
+      "storage": "verified"
+    }
+  },
+  "exit_code": 3,
+  "errors": [],
+  "warnings": [
+    "good: state=completed, 1 parser warnings; inspect metadata.json",
+    "bad: state=completed, 3 parser warnings; inspect metadata.json"
+  ],
+  "total_changes": 856,
+  "categories": {
+    "Exit status": 1,
+    "Capture completeness": 1,
+    "Command arguments": 1,
+    "Executable changes": 5,
+    "New file access": 677,
+    "Removed file access": 171
+  },
+  "detail_group_candidates": 327,
+  "top_five": [
+    {
+      "rank": 1,
+      "category": "Exit status",
+      "subject": "",
+      "detail_group": null,
+      "left": [
+        "code=Some(0), signal=None"
+      ],
+      "right": [
+        "code=Some(1), signal=None"
+      ],
+      "left_evidence": [],
+      "right_evidence": []
+    },
+    {
+      "rank": 2,
+      "category": "Capture completeness",
+      "subject": "",
+      "detail_group": null,
+      "left": [
+        "completed; partial; 1 warnings"
+      ],
+      "right": [
+        "completed; partial; 3 warnings"
+      ],
+      "left_evidence": [],
+      "right_evidence": []
+    },
+    {
+      "rank": 3,
+      "category": "Command arguments",
+      "subject": "",
+      "detail_group": null,
+      "left": [
+        "[\"${RUST_TOOLCHAIN}/bin/cargo\", \"build\", \"--offline\", \"--locked\", \"--manifest-path\", \"${WORK}/meson/fixture/meson-cargo-path-dep-reproducer/Cargo.toml\", \"--target-dir\", \"${WORK}/meson/cargo-output\"]"
+      ],
+      "right": [
+        "[\"/usr/bin/python3\", \"-B\", \"${WORK}/meson/upstream/meson.py\", \"setup\", \"${WORK}/meson/meson-output\", \"${WORK}/meson/fixture/meson-cargo-path-dep-reproducer\", \"--wrap-mode=nodownload\"]"
+      ],
+      "left_evidence": [],
+      "right_evidence": []
+    },
+    {
+      "rank": 4,
+      "category": "Executable changes",
+      "subject": "${WORK}/meson/meson-output/meson-private/sanity_check_for_rust.exe (execve)",
+      "detail_group": null,
+      "left": [],
+      "right": [
+        "success"
+      ],
+      "left_evidence": [],
+      "right_evidence": [
+        {
+          "file": "raw/trace.log",
+          "line": 1275,
+          "end_line": 1277
+        },
+        {
+          "file": "raw/trace.log",
+          "line": 2002,
+          "end_line": 2004
+        }
+      ]
+    },
+    {
+      "rank": 5,
+      "category": "Executable changes",
+      "subject": "/usr/bin/ld (execve)",
+      "detail_group": null,
+      "left": [],
+      "right": [
+        "success"
+      ],
+      "left_evidence": [],
+      "right_evidence": [
+        {
+          "file": "raw/trace.log",
+          "line": 776,
+          "end_line": 778
+        },
+        {
+          "file": "raw/trace.log",
+          "line": 1500,
+          "end_line": 1502
+        }
+      ]
+    }
+  ],
+  "selected_later_observations": [
+    {
+      "rank": 40,
+      "category": "New file access",
+      "subject": "${WORK}/meson/fixture/meson-cargo-path-dep-reproducer/./Cargo.toml (openat)",
+      "detail_group": null,
+      "left": [],
+      "right": [
+        "success"
+      ],
+      "left_evidence": [],
+      "right_evidence": [
+        {
+          "file": "raw/trace.log",
+          "line": 2016,
+          "end_line": 2016
+        }
+      ]
+    },
+    {
+      "rank": 41,
+      "category": "New file access",
+      "subject": "${WORK}/meson/fixture/meson-cargo-path-dep-reproducer/./bar/Cargo.toml (openat)",
+      "detail_group": null,
+      "left": [],
+      "right": [
+        "success"
+      ],
+      "left_evidence": [],
+      "right_evidence": [
+        {
+          "file": "raw/trace.log",
+          "line": 2017,
+          "end_line": 2017
+        }
+      ]
+    },
+    {
+      "rank": 42,
+      "category": "New file access",
+      "subject": "${WORK}/meson/fixture/meson-cargo-path-dep-reproducer/./foo/Cargo.toml (openat)",
+      "detail_group": null,
+      "left": [],
+      "right": [
+        "success"
+      ],
+      "left_evidence": [],
+      "right_evidence": [
+        {
+          "file": "raw/trace.log",
+          "line": 2018,
+          "end_line": 2018
+        }
+      ]
+    },
+    {
+      "rank": 43,
+      "category": "New file access",
+      "subject": "${WORK}/meson/fixture/meson-cargo-path-dep-reproducer/bar/meson.build (openat)",
+      "detail_group": null,
+      "left": [],
+      "right": [
+        "success"
+      ],
+      "left_evidence": [],
+      "right_evidence": [
+        {
+          "file": "raw/trace.log",
+          "line": 2012,
+          "end_line": 2012
+        }
+      ]
+    },
+    {
+      "rank": 519,
+      "category": "Removed file access",
+      "subject": "${WORK}/meson/fixture/meson-cargo-path-dep-reproducer/Cargo.toml (openat)",
+      "detail_group": null,
+      "left": [
+        "success"
+      ],
+      "right": [],
+      "left_evidence": [
+        {
+          "file": "raw/trace.log",
+          "line": 36,
+          "end_line": 36
+        }
+      ],
+      "right_evidence": []
+    },
+    {
+      "rank": 520,
+      "category": "Removed file access",
+      "subject": "${WORK}/meson/fixture/meson-cargo-path-dep-reproducer/bar/Cargo.toml (openat)",
+      "detail_group": null,
+      "left": [
+        "success"
+      ],
+      "right": [],
+      "left_evidence": [
+        {
+          "file": "raw/trace.log",
+          "line": 37,
+          "end_line": 37
+        }
+      ],
+      "right_evidence": []
+    },
+    {
+      "rank": 522,
+      "category": "Removed file access",
+      "subject": "${WORK}/meson/fixture/meson-cargo-path-dep-reproducer/foo/Cargo.toml (openat)",
+      "detail_group": null,
+      "left": [
+        "success"
+      ],
+      "right": [],
+      "left_evidence": [
+        {
+          "file": "raw/trace.log",
+          "line": 42,
+          "end_line": 42
+        }
+      ],
+      "right_evidence": []
+    }
+  ],
+  "runs": {
+    "good": {
+      "name": "good",
+      "schema_version": 3,
+      "tool_version": "0.1.0",
+      "command": [
+        "${RUST_TOOLCHAIN}/bin/cargo",
+        "build",
+        "--offline",
+        "--locked",
+        "--manifest-path",
+        "${WORK}/meson/fixture/meson-cargo-path-dep-reproducer/Cargo.toml",
+        "--target-dir",
+        "${WORK}/meson/cargo-output"
+      ],
+      "cwd": "${WORK}/meson",
+      "backend": "strace -- version 6.16",
+      "state": "completed",
+      "exit_code": 0,
+      "signal": null,
+      "collector_exit_code": 0,
+      "collector_signal": null,
+      "target_exit_raw": "+++ exited with 0 +++",
+      "completeness": "partial",
+      "parsed_events": 1172,
+      "raw_lines": 1206,
+      "warnings": [
+        "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+      ],
+      "environment": {},
+      "record_cli_exit_code": 0,
+      "storage_integrity": {
+        "status": "verified",
+        "detail": "metadata and events match finalized byte counts, event count and SHA-256; raw logs are not checksummed"
+      }
+    },
+    "bad": {
+      "name": "bad",
+      "schema_version": 3,
+      "tool_version": "0.1.0",
+      "command": [
+        "/usr/bin/python3",
+        "-B",
+        "${WORK}/meson/upstream/meson.py",
+        "setup",
+        "${WORK}/meson/meson-output",
+        "${WORK}/meson/fixture/meson-cargo-path-dep-reproducer",
+        "--wrap-mode=nodownload"
+      ],
+      "cwd": "${WORK}/meson",
+      "backend": "strace -- version 6.16",
+      "state": "completed",
+      "exit_code": 1,
+      "signal": null,
+      "collector_exit_code": 1,
+      "collector_signal": null,
+      "target_exit_raw": "+++ exited with 1 +++",
+      "completeness": "partial",
+      "parsed_events": 1994,
+      "raw_lines": 2067,
+      "warnings": [
+        "shared filesystem state or root/namespace changes observed; cwd fallback disabled",
+        "raw/trace.log:1240: path context unresolved; last observed CWD is not a verified current path; consult raw evidence",
+        "raw/trace.log:1964: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+      ],
+      "environment": {},
+      "record_cli_exit_code": 1,
+      "storage_integrity": {
+        "status": "verified",
+        "detail": "metadata and events match finalized byte counts, event count and SHA-256; raw logs are not checksummed"
+      }
+    }
+  }
+}

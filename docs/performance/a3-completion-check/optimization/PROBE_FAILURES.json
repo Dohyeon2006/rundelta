@@ -1,0 +1,179 @@
+[
+  {
+    "reason": "source-line start breakpoint is not physical capture::record; interval rejected",
+    "result": {
+      "schema_version": 1,
+      "head": "1c6e0f777e20b208ede8416e97defb370e943532",
+      "profile": "release-before-opt3-debug2",
+      "binary_sha256": "dd53d9485a35da9e6b8cca4a5b6c6b3c0f387659ad544f9fcfba30a298ffca5f",
+      "capture_sha256": "f1ff7e3d50ca0a89ac9fd6e93dd5f714be7730c7477f80c0ab968a7b890837e1",
+      "plan_sha256": "ceb9e0259cff4b5b9bb93ae37962ab97d02f436d68f87ed1958672edcec741a3",
+      "script_sha256": {
+        "measure.py": "f88ffd2bb456545128c54d51362a4e84e267bdb9191df35e95e77e7dcf2fad4c",
+        "probe_gdb.py": "3305d867ef9bc7fe5b97f3aeda7f906e9af3adb65ca6f3bcae9c5c3d0efb74b8",
+        "synthetic_backend.py": "9d78c1087a56db1b1ecfbafe0a494bf5f08ae55576a0d64d3298007d39ff6e7d"
+      },
+      "environment": {
+        "kernel": "7.2.5-200.fc44.x86_64",
+        "machine": "x86_64",
+        "python": "3.14.7",
+        "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+        "gdb": "GNU gdb (Fedora Linux) 17.2-2.fc44",
+        "cpu": "AMD Ryzen 7 9700X 8-Core Processor",
+        "logical_cpus": 16,
+        "affinity_cpus": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "timing_clock": "perf_counter_ns; wall-time",
+        "rss_units": "KiB",
+        "repeats": 3
+      },
+      "samples": [],
+      "groups": [],
+      "failures": [
+        {
+          "type": "AssertionError",
+          "message": "measurement failed; inspect private logs; no failed sample discarded"
+        }
+      ],
+      "interval": {
+        "start_line": 198,
+        "end_line": 209,
+        "final_line": 258,
+        "scope": "missing exits only"
+      }
+    },
+    "probes": [
+      {
+        "hits": {
+          "start": 1,
+          "end": 1,
+          "final": 1
+        },
+        "start_frame": "core::iter::traits::iterator::Iterator::try_fold<core::slice::iter::Iter<rundelta::model::Event>, (), core::iter::adapters::map::map_try_fold::{closure_env#0}<&rundelta::model::Event, core::iter::adapters::chain::Chain<core::iter::sources::once::Once<alloc::string::String>, core::option::IntoIter<alloc::string::String>>, (), core::ops::control_flow::ControlFlow<alloc::string::String, ()>, rundelta::capture::record::{closure_env#10}, core::iter::adapters::flatten::{impl#18}::iter_try_fold::flatten::{closure_env#0}<core::iter::adapters::chain::Chain<core::iter::sources::once::Once<alloc::string::String>, core::option::IntoIter<alloc::string::String>>, (), core::ops::control_flow::ControlFlow<alloc::string::String, ()>, core::iter::adapters::flatten::{impl#20}::try_fold::flatten::{closure_env#0}<core::iter::adapters::chain::Chain<core::iter::sources::once::Once<alloc::string::String>, core::option::IntoIter<alloc::string::String>>, (), core::ops::control_flow::ControlFlow<alloc::string::String, ()>, core::iter::traits::iterator::Iterator::find::check::{closure_env#0}<alloc::string::String, &mut rundelta::capture::record::{closure_env#11}>>>>, core::ops::control_flow::ControlFlow<alloc::string::String, ()>>",
+        "start_memory_kib": {
+          "VmRSS": 7764,
+          "VmHWM": 7764
+        },
+        "end_frame": "rundelta::capture::record",
+        "completion_wall_ms": 50.832421,
+        "end_memory_kib": {
+          "VmRSS": 7764,
+          "VmHWM": 7764
+        },
+        "final_frame": "rundelta::capture::record",
+        "final_memory_kib": {
+          "VmRSS": 8012,
+          "VmHWM": 14792
+        },
+        "exit_code": 0
+      }
+    ]
+  },
+  {
+    "reason": "source-line start breakpoint is not physical capture::record; interval rejected",
+    "result": {
+      "schema_version": 1,
+      "head": "1c6e0f777e20b208ede8416e97defb370e943532",
+      "profile": "release-before-opt3-debug2",
+      "binary_sha256": "dd53d9485a35da9e6b8cca4a5b6c6b3c0f387659ad544f9fcfba30a298ffca5f",
+      "capture_sha256": "f1ff7e3d50ca0a89ac9fd6e93dd5f714be7730c7477f80c0ab968a7b890837e1",
+      "plan_sha256": "ceb9e0259cff4b5b9bb93ae37962ab97d02f436d68f87ed1958672edcec741a3",
+      "script_sha256": {
+        "measure.py": "f88ffd2bb456545128c54d51362a4e84e267bdb9191df35e95e77e7dcf2fad4c",
+        "probe_gdb.py": "11861de5c566b3d0a943fc4d37f07408742ebc54d31361ee42eda1e89a648df4",
+        "synthetic_backend.py": "9d78c1087a56db1b1ecfbafe0a494bf5f08ae55576a0d64d3298007d39ff6e7d"
+      },
+      "environment": {
+        "kernel": "7.2.5-200.fc44.x86_64",
+        "machine": "x86_64",
+        "python": "3.14.7",
+        "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+        "gdb": "GNU gdb (Fedora Linux) 17.2-2.fc44",
+        "cpu": "AMD Ryzen 7 9700X 8-Core Processor",
+        "logical_cpus": 16,
+        "affinity_cpus": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "timing_clock": "perf_counter_ns; wall-time",
+        "rss_units": "KiB",
+        "repeats": 3
+      },
+      "samples": [],
+      "groups": [],
+      "failures": [
+        {
+          "type": "AssertionError",
+          "message": "measurement failed; inspect private logs; no failed sample discarded"
+        }
+      ],
+      "interval": {
+        "start_line": 198,
+        "end_line": 209,
+        "final_line": 258,
+        "scope": "missing exits only"
+      }
+    },
+    "probes": [
+      {
+        "hits": {
+          "start": 1,
+          "end": 1,
+          "final": 1
+        },
+        "start_inline_frames": [
+          "core::iter::traits::iterator::Iterator::try_fold<core::slice::iter::Iter<rundelta::model::Event>, (), core::iter::adapters::map::map_try_fold::{closure_env#0}<&rundelta::model::Event, core::iter::adapters::chain::Chain<core::iter::sources::once::Once<alloc::string::String>, core::option::IntoIter<alloc::string::String>>, (), core::ops::control_flow::ControlFlow<alloc::string::String, ()>, rundelta::capture::record::{closure_env#10}, core::iter::adapters::flatten::{impl#18}::iter_try_fold::flatten::{closure_env#0}<core::iter::adapters::chain::Chain<core::iter::sources::once::Once<alloc::string::String>, core::option::IntoIter<alloc::string::String>>, (), core::ops::control_flow::ControlFlow<alloc::string::String, ()>, core::iter::adapters::flatten::{impl#20}::try_fold::flatten::{closure_env#0}<core::iter::adapters::chain::Chain<core::iter::sources::once::Once<alloc::string::String>, core::option::IntoIter<alloc::string::String>>, (), core::ops::control_flow::ControlFlow<alloc::string::String, ()>, core::iter::traits::iterator::Iterator::find::check::{closure_env#0}<alloc::string::String, &mut rundelta::capture::record::{closure_env#11}>>>>, core::ops::control_flow::ControlFlow<alloc::string::String, ()>>"
+        ],
+        "start_frame": "core::iter::adapters::map::{impl#2}::try_fold<core::iter::adapters::chain::Chain<core::iter::sources::once::Once<alloc::string::String>, core::option::IntoIter<alloc::string::String>>, core::slice::iter::Iter<rundelta::model::Event>, rundelta::capture::record::{closure_env#10}, (), core::iter::adapters::flatten::{impl#18}::iter_try_fold::flatten::{closure_env#0}<core::iter::adapters::chain::Chain<core::iter::sources::once::Once<alloc::string::String>, core::option::IntoIter<alloc::string::String>>, (), core::ops::control_flow::ControlFlow<alloc::string::String, ()>, core::iter::adapters::flatten::{impl#20}::try_fold::flatten::{closure_env#0}<core::iter::adapters::chain::Chain<core::iter::sources::once::Once<alloc::string::String>, core::option::IntoIter<alloc::string::String>>, (), core::ops::control_flow::ControlFlow<alloc::string::String, ()>, core::iter::traits::iterator::Iterator::find::check::{closure_env#0}<alloc::string::String, &mut rundelta::capture::record::{closure_env#11}>>>, core::ops::control_flow::ControlFlow<alloc::string::String, ()>>",
+        "start_memory_kib": {
+          "VmRSS": 7516,
+          "VmHWM": 7516
+        },
+        "end_inline_frames": [],
+        "end_frame": "rundelta::capture::record",
+        "completion_wall_ms": 50.463413,
+        "end_memory_kib": {
+          "VmRSS": 7516,
+          "VmHWM": 7516
+        },
+        "final_inline_frames": [],
+        "final_frame": "rundelta::capture::record",
+        "final_memory_kib": {
+          "VmRSS": 7764,
+          "VmHWM": 14316
+        },
+        "exit_code": 0
+      }
+    ]
+  }
+]

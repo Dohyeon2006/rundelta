@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "case": "pybind11-5626",
+  "purpose": "frozen descriptive evidence, no ranking changes",
+  "sha256": {
+    "FROZEN.md": "be5f22532cc6e013f855262a873a1c7a4560d73f01c9d7cc1a0ceeee8e3c46b4",
+    "NOISE_ANALYSIS.md": "32fb13cab9141c0496dc6e760a832887b8b2d3174b09b82f27995df5225396ac",
+    "README.md": "511f80661bf7ae12fbca41502fac738c5f4691a20afa580c3ec2f9c1d213ae71",
+    "REPORT.md": "3605638762ba3e328c28163d34b85c34c45488c7fd6d85a62e7155a336246221",
+    "evidence.json": "4e23c075a30e4b9a3d0d33dab580de9c1ddf0c9365d3cb3f47840ffaf26ee1ce",
+    "noise-summary.json": "562606e6bcee05f4f3f9745d683a4bf41b9490ca30edbb69ecdde1e2e8cdb6c6",
+    "parent-processes.csv": "49fa2d0e3311117dd21fb9fa734573370122298277daa510422e4e3c469db5e5",
+    "repeat-differences.csv": "4466330ef245e4dbc82b757c5dafd25dc3a9a9091de9aba0834e08c475aefbae",
+    "reproduce.py": "bf1569b9579d13edb349b2c1427f4b56714d116e963edad45935e8763205bd44",
+    "summarize.py": "1e26af39748e219c7b98b9dea1b1fe412965d61262f1dd5ba79fd3c0d7a388d9",
+    "verify.py": "75ba921c255469d70b126309eba02840fc5832d316123218ba8fcf2aa038173a"
+  }
+}

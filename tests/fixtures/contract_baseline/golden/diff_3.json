@@ -1,0 +1,24 @@
+{
+  "schema_version": 4,
+  "observed_differences": false,
+  "reliability": {
+    "left": {
+      "capture": "complete",
+      "storage": "verified"
+    },
+    "right": {
+      "capture": "complete",
+      "storage": "unverified"
+    }
+  },
+  "exit_code": 3,
+  "errors": [],
+  "left": "baseline-left",
+  "right": "legacy-v2",
+  "left_id": "abc001-101",
+  "right_id": "abc102-202",
+  "changes": [],
+  "warnings": [
+    "legacy-v2: storage integrity unverified: legacy record has no finalization checksums"
+  ]
+}

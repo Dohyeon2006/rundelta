@@ -1,6 +1,15 @@
-//! Expectations registered before implementing the FsContext model.
+//! Regression expectations for the capture-time FsContext and identity model.
+//!
+//! These synthetic traces isolate specific state transitions and ambiguity
+//! windows. They do not confirm collector/target completion or validate all
+//! Linux ABI combinations; real-process acceptance probes serve that purpose
+//! within their own tested scope. Raw line numbers and warning counts are part
+//! of each regression's evidence contract, not values to relax for a refactor.
 use super::*;
 
+// Supply one initial exec and an absolute returned-FD observation so the final
+// row tests context propagation rather than an unrelated unresolved operand.
+// The returned path's spelling does not prove payload content or file identity.
 fn observed(raw: &str, pid: &str) -> Parsed {
     parse_with_cwd(
         &format!(
@@ -22,7 +31,240 @@ fn event_at(p: &Parsed, line: usize) -> &crate::model::Event {
 }
 
 #[test]
+fn failed_return_text_cannot_claim_a_successful_directory_change() {
+    // Deliberately malformed raw input, not an alleged strace spelling.
+    let p = observed("1 chdir(\"/changed\") = -1 success\n", "1");
+    assert_eq!(last_cwd(&p), Some("/A"));
+    assert_eq!(p.events.len(), 2);
+    assert_eq!(p.warnings.len(), 1);
+    assert!(p.warnings[0].starts_with("raw/trace.log:2: unsupported or incomplete event:"));
+}
+
+#[test]
+fn failed_return_text_cannot_claim_a_successful_fs_split() {
+    let p = observed(
+        concat!(
+            "1 clone(flags=CLONE_FS|SIGCHLD) = 2\n",
+            "2 unshare(CLONE_FS) = -1 success\n",
+            "2 chdir(\"/changed\") = 0\n",
+        ),
+        "1",
+    );
+    assert_eq!(last_cwd(&p), Some("/changed"));
+    assert_eq!(p.events.len(), 4);
+    assert_eq!(p.warnings.len(), 1);
+    assert!(p.warnings[0].starts_with("raw/trace.log:3: unsupported or incomplete event:"));
+}
+
+#[test]
+fn malformed_failure_tokens_never_create_success_observations() {
+    for call in [
+        "chdir(\"/changed\")",
+        r"fchdir(3<\x2f\x63\x68\x61\x6e\x67\x65\x64>)",
+        "clone(flags=CLONE_FS|SIGCHLD)",
+        "fork()",
+        "unshare(CLONE_FS)",
+        "setns(3, CLONE_NEWNS)",
+        "mount(\"none\", \"/mnt\", \"tmpfs\", 0, NULL)",
+        "execve(\"/other\", [], 0)",
+        "open(\"payload\", O_RDONLY)",
+    ] {
+        for result in ["-1 success", "-1", "-1 0", "-1 unknown", "-1 Enoent"] {
+            let p = observed(&format!("1 {call} = {result}\n"), "1");
+            assert_eq!(p.events.len(), 2, "{call} = {result}");
+            assert_eq!(p.warnings.len(), 1, "{call} = {result}");
+            assert!(p.warnings[0].starts_with("raw/trace.log:2: unsupported or incomplete event:"));
+            assert_eq!(last_cwd(&p), Some("/A"));
+            assert!(!p.events.last().unwrap().context_uncertain);
+        }
+    }
+}
+
+#[test]
+fn numeric_success_and_errno_failure_preserve_transition_and_evidence_contracts() {
+    for (result, cwd, outcome) in [
+        ("0", "/changed", "success"),
+        ("-1 ENOENT (No such file or directory)", "/A", "ENOENT"),
+        ("-1 ERESTARTSYS (To be restarted)", "/A", "ERESTARTSYS"),
+        (
+            "-1 E_PLATFORM_2 (Opaque platform errno)",
+            "/A",
+            "E_PLATFORM_2",
+        ),
+    ] {
+        let p = observed(&format!("1 chdir(\"/changed\") = {result}\n"), "1");
+        assert!(p.warnings.is_empty(), "{:?}", p.warnings);
+        assert_eq!(last_cwd(&p), Some(cwd));
+        let change = event_at(&p, 2);
+        assert_eq!(change.outcome, outcome);
+        assert_eq!(change.schema_version, 2);
+        assert_eq!(change.evidence.file, "raw/trace.log");
+        assert_eq!(change.evidence.end_line, 2);
+    }
+
+    for (result, cwd, outcome) in [
+        ("0", "/A", "success"),
+        ("-1 EPERM (Operation not permitted)", "/changed", "EPERM"),
+    ] {
+        let p = observed(
+            &format!(
+                "1 clone(flags=CLONE_FS|SIGCHLD) = 2\n2 unshare(CLONE_FS) = {result}\n2 chdir(\"/changed\") = 0\n"
+            ),
+            "1",
+        );
+        assert!(p.warnings.is_empty(), "{:?}", p.warnings);
+        assert_eq!(last_cwd(&p), Some(cwd));
+        assert_eq!(event_at(&p, 3).outcome, outcome);
+    }
+}
+
+#[test]
+fn malformed_resumed_failure_keeps_raw_warning_coordinates_without_transition() {
+    let p = observed(
+        "1 chdir(\"/changed\" <unfinished ...>\n1 <... chdir resumed>) = -1 success\n",
+        "1",
+    );
+    assert_eq!(p.events.len(), 2);
+    assert_eq!(last_cwd(&p), Some("/A"));
+    assert_eq!(p.warnings.len(), 1);
+    assert!(p.warnings[0].starts_with("raw/trace.log:3: unsupported or incomplete event:"));
+    assert_eq!(p.events.last().unwrap().evidence.line, 4);
+    assert_eq!(p.events.last().unwrap().evidence.end_line, 4);
+}
+
+#[test]
+fn unfinished_prefix_does_not_cross_exit_and_fresh_spawn_generation() {
+    let mut p = parse_with_cwd(
+        concat!(
+            "1 execve(\"/tool\", [], 0) = 0\n",
+            "1 clone(flags=CLONE_FS|SIGCHLD) = 2\n",
+            "2 chdir(\"/B\" <unfinished ...>\n",
+            "2 +++ exited with 0 +++\n",
+            "1 clone(flags=CLONE_FS|SIGCHLD) = 2\n",
+            "2 <... chdir resumed>) = 0\n",
+            "1 open(\"/parent\", O_RDONLY) = 3\n",
+        ),
+        "trace",
+        Some("/A"),
+    );
+    assert_eq!(last_cwd(&p), Some("/A"));
+    assert!(!p.events.iter().any(|event| event.operation == "chdir"));
+    assert_eq!(p.warnings.len(), 2, "{:?}", p.warnings);
+    assert!(p.warnings[0].starts_with("trace:4:"));
+    assert!(p.warnings[1].starts_with("trace:6: unmatched resumed call"));
+    p.bind_task_generations();
+    assert_eq!(event_at(&p, 2).child_generation, Some(1));
+    assert_eq!(event_at(&p, 4).task_generation, Some(1));
+    assert_eq!(event_at(&p, 5).child_generation, Some(2));
+    assert_eq!(event_at(&p, 4).evidence.end_line, 4);
+}
+
+#[test]
+fn shared_live_collision_invalidates_the_source_context_too() {
+    let p = observed(
+        concat!(
+            "1 fork() = 2\n",
+            "1 clone(flags=CLONE_FS|SIGCHLD) = 2\n",
+            "2 chdir(\"/B\") = 0\n",
+        ),
+        "1",
+    );
+    assert!(p.events.last().unwrap().context_uncertain);
+    assert_eq!(last_cwd(&p), None);
+    assert_eq!(p.warnings.len(), 1);
+    assert!(p.warnings[0].contains("LiveCollision"));
+}
+
+#[test]
+fn child_prefix_predating_spawn_entry_is_not_borrowed_by_the_new_lifetime() {
+    let p = parse_with_cwd(
+        concat!(
+            "1 execve(\"/tool\", [], 0) = 0\n",
+            "2 chdir(\"/old\" <unfinished ...>\n",
+            "1 clone(flags=CLONE_FS|SIGCHLD <unfinished ...>\n",
+            "1 <... clone resumed>) = 2\n",
+            "2 <... chdir resumed>) = 0\n",
+            "2 chdir(\"/new\") = 0\n",
+            "1 open(\"/parent\", O_RDONLY) = 3\n",
+        ),
+        "trace",
+        Some("/A"),
+    );
+    assert_eq!(last_cwd(&p), Some("/new"));
+    assert_eq!(p.warnings.len(), 2, "{:?}", p.warnings);
+    assert!(p.warnings[0].starts_with("trace:4:"));
+    assert!(p.warnings[0].contains("line 2 predates spawn entry at line 3"));
+    assert!(p.warnings[1].starts_with("trace:5: unmatched resumed call"));
+    assert_eq!(event_at(&p, 3).evidence.end_line, 4);
+    assert!(!p.events.iter().any(|event| event.evidence.line == 2));
+    assert!(!p.events.last().unwrap().context_uncertain);
+}
+
+#[test]
+fn child_prefix_after_spawn_entry_survives_parent_resume_and_signal_rows() {
+    let mut p = parse_with_cwd(
+        concat!(
+            "1 execve(\"/tool\", [], 0) = 0\n",
+            "1 clone(flags=CLONE_FS|SIGCHLD <unfinished ...>\n",
+            "2 chdir(\"/B\" <unfinished ...>\n",
+            "2 --- SIGUSR1 {si_signo=SIGUSR1} ---\n",
+            "1 <... clone resumed>) = 2\n",
+            "2 <... chdir resumed>) = 0\n",
+            "1 open(\"/parent\", O_RDONLY) = 3\n",
+        ),
+        "trace",
+        Some("/A"),
+    );
+    assert!(p.warnings.is_empty(), "{:?}", p.warnings);
+    assert_eq!(last_cwd(&p), Some("/B"));
+    assert_eq!(event_at(&p, 2).evidence.end_line, 5);
+    assert_eq!(event_at(&p, 3).evidence.end_line, 6);
+    p.bind_task_generations();
+    assert_eq!(event_at(&p, 2).child_generation, Some(1));
+    assert_eq!(event_at(&p, 3).task_generation, Some(1));
+}
+
+#[test]
+fn private_collision_leaves_an_independent_source_context_known() {
+    let p = observed("1 fork() = 2\n1 fork() = 2\n2 chdir(\"/B\") = 0\n", "1");
+    assert_eq!(last_cwd(&p), Some("/A"));
+    assert!(!p.events.last().unwrap().context_uncertain);
+    assert_eq!(p.warnings.len(), 1);
+    assert!(p.warnings[0].contains("LiveCollision"));
+}
+
+#[test]
+fn shared_collision_backfills_pending_source_cwd_but_keeps_private_branch_known() {
+    let p = parse_with_cwd(
+        concat!(
+            "1 execve(\"/tool\", [], 0) = 0\n",
+            "1 fork() = 2\n",
+            "1 fork() = 4\n",
+            "1 clone(flags=CLONE_FS|SIGCHLD) = 3\n",
+            "1 chdir(\"/B\" <unfinished ...>\n",
+            "3 clone(flags=CLONE_FS|SIGCHLD) = 2\n",
+            "1 <... chdir resumed>) = 0\n",
+            "1 open(\"/parent\", O_RDONLY) = 3\n",
+            "4 open(\"/private\", O_RDONLY) = 3\n",
+        ),
+        "trace",
+        Some("/A"),
+    );
+    assert!(event_at(&p, 5).context_uncertain);
+    assert_eq!(event_at(&p, 5).evidence.end_line, 7);
+    assert_eq!(event_at(&p, 8).cwd_before, None);
+    assert!(event_at(&p, 8).context_uncertain);
+    assert_eq!(event_at(&p, 9).cwd_before.as_deref(), Some("/A"));
+    assert!(!event_at(&p, 9).context_uncertain);
+    assert_eq!(p.warnings.len(), 1);
+    assert!(p.warnings[0].starts_with("trace:6: task.identity:"));
+}
+
+#[test]
 fn task_timeline_accepts_initial_and_each_fresh_spawn_generation() {
+    // Child activity precedes parent resume, then the numeric PID is reused by
+    // a new successful spawn. The entry bounds must introduce the right lifetime
+    // without treating the second child as a continuation of the first.
     let p = parse_with_cwd(
         concat!(
             "1 execve(\"/tool\", [], 0) = 0\n",
@@ -73,7 +315,126 @@ fn task_timeline_accepts_initial_and_each_fresh_spawn_generation() {
 }
 
 #[test]
+fn trace_v1_freezes_spawn_generations_without_reordering_evidence() {
+    // The child acts before the parent's resumed spawn is inserted. Reusing PID
+    // 2 later must retain two child lifetimes while PID 1 remains generation 1.
+    let raw = concat!(
+        "1 execve(\"/tool\", [], 0) = 0\n",
+        "1 clone(flags=SIGCHLD <unfinished ...>\n",
+        "2 open(\"/first\", O_RDONLY) = 3\n",
+        "1 <... clone resumed>) = 2\n",
+        "2 +++ exited with 0 +++\n",
+        "1 fork() = 2\n",
+        "2 open(\"/second\", O_RDONLY) = 3\n",
+        "2 +++ exited with 0 +++\n",
+        "1 fork() = -1 EAGAIN (Resource temporarily unavailable)\n",
+        "1 +++ exited with 0 +++\n",
+    );
+    let mut parsed = parse_with_cwd(raw, "raw/trace.log", Some("/A"));
+    assert!(parsed.warnings.is_empty(), "{:?}", parsed.warnings);
+    assert!(parsed.events.iter().all(|event| {
+        event.schema_version == 2
+            && event.task_generation.is_none()
+            && event.child_generation.is_none()
+    }));
+    let original_coordinates = parsed
+        .events
+        .iter()
+        .map(|event| event.evidence.clone())
+        .collect::<Vec<_>>();
+
+    parsed.bind_task_generations();
+
+    assert_eq!(
+        parsed
+            .events
+            .iter()
+            .map(|event| (
+                event.evidence.line,
+                event.pid.as_str(),
+                event.task_generation,
+                event.child_generation,
+            ))
+            .collect::<Vec<_>>(),
+        [
+            (1, "1", Some(1), None),
+            (3, "2", Some(1), None),
+            (2, "1", Some(1), Some(1)),
+            (5, "2", Some(1), None),
+            (6, "1", Some(1), Some(2)),
+            (7, "2", Some(2), None),
+            (8, "2", Some(2), None),
+            (9, "1", Some(1), None),
+            (10, "1", Some(1), None),
+        ]
+    );
+    assert!(parsed.events.iter().all(|event| event.schema_version == 3));
+    assert_eq!(
+        parsed
+            .events
+            .iter()
+            .map(|event| event.evidence.clone())
+            .collect::<Vec<_>>(),
+        original_coordinates
+    );
+}
+
+#[test]
+fn trace_v1_retains_collision_and_reappearance_uncertainty() {
+    // Persisting an identity interpretation does not certify it. An impossible
+    // live collision displaces the old lifetime; a post-exit actor starts a
+    // third uncertain lifetime instead of borrowing either previous exit.
+    let mut parsed = parse_with_cwd(
+        concat!(
+            "1 execve(\"/tool\", [], 0) = 0\n",
+            "1 fork() = 2\n",
+            "1 fork() = 2\n",
+            "2 +++ exited with 0 +++\n",
+            "2 open(\"/reappeared\", O_RDONLY) = 3\n",
+            "1 +++ exited with 0 +++\n",
+        ),
+        "raw/trace.log",
+        Some("/A"),
+    );
+    let original_warnings = parsed.warnings.clone();
+    parsed.bind_task_generations();
+    assert_eq!(parsed.warnings, original_warnings);
+    assert!(
+        parsed
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("LiveCollision"))
+    );
+    assert!(
+        parsed
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("Reappeared"))
+    );
+    assert_eq!(event_at(&parsed, 2).child_generation, Some(1));
+    assert_eq!(event_at(&parsed, 3).child_generation, Some(2));
+    assert_eq!(event_at(&parsed, 4).task_generation, Some(2));
+    assert_eq!(event_at(&parsed, 5).task_generation, Some(3));
+    assert!(event_at(&parsed, 4).context_uncertain);
+    assert!(event_at(&parsed, 5).context_uncertain);
+    let displaced = parsed
+        .timeline
+        .spawned_generation(
+            parsed
+                .events
+                .iter()
+                .position(|event| event.evidence.line == 2)
+                .unwrap(),
+        )
+        .unwrap();
+    assert_eq!(parsed.timeline.exit_event(displaced), None);
+}
+
+#[test]
 fn task_timeline_fails_closed_for_each_untrusted_origin() {
+    // LiveCollision is deliberately contradictory evidence, not a claimed real
+    // kernel schedule. It checks that malformed identity cannot borrow an old
+    // context; Reappeared and Unintroduced cover distinct missing introductions.
     for (raw, expected_warning, affected_line) in [
         (
             "1 execve(\"/tool\", [], 0) = 0\n2 open(\"/unintroduced\", O_RDONLY) = 3\n",
@@ -147,6 +508,8 @@ fn spawned_child_inherits_an_untrusted_parents_fs_uncertainty() {
 
 #[test]
 fn live_collision_does_not_lend_the_new_exit_to_the_old_generation() {
+    // A raw PID match is insufficient completion evidence when its lifetime is
+    // ambiguous. Keeping the old generation without an exit is the safe result.
     let p = parse_with_cwd(
         concat!(
             "1 execve(\"/tool\", [], 0) = 0\n",
@@ -214,6 +577,9 @@ fn clone3_structure_and_private_inheritance() {
 
 #[test]
 fn syscall_specific_flag_decoders_accept_only_their_audited_abi() {
+    // This matrix freezes these accepted cases; it is not exhaustive ABI proof.
+    // The same bit position must be decoded under the operation that printed it,
+    // especially legacy CSIGNAL, clone3 NEWTIME, and unshare EMPTY_MNTNS.
     for (expression, expected) in [
         ("0", SpawnEffect::PrivateFs),
         ("SIGCHLD", SpawnEffect::PrivateFs),
@@ -278,11 +644,18 @@ fn syscall_specific_flag_decoders_accept_only_their_audited_abi() {
 
     for (expression, expected) in [
         ("0", UnshareEffect::NoFsChange),
-        ("CLONE_NEWTIME", UnshareEffect::SplitFsNamespaceUncertain),
-        ("0x80", UnshareEffect::SplitFsNamespaceUncertain),
+        (
+            "CLONE_NEWTIME",
+            UnshareEffect::ConnectedFsNamespaceUncertain,
+        ),
+        ("0x80", UnshareEffect::ConnectedFsNamespaceUncertain),
         ("CLONE_FS", UnshareEffect::SplitFs),
         ("CLONE_NEWUSER", UnshareEffect::SplitFsNamespaceUncertain),
         ("CLONE_NEWNS", UnshareEffect::SplitFsNamespaceUncertain),
+        (
+            "CLONE_FS|CLONE_NEWNET",
+            UnshareEffect::SplitFsNamespaceUncertain,
+        ),
         (
             "UNSHARE_EMPTY_MNTNS",
             UnshareEffect::SplitFsNamespaceUncertain,
@@ -299,6 +672,9 @@ fn syscall_specific_flag_decoders_accept_only_their_audited_abi() {
 
 #[test]
 fn syscall_specific_flag_decoders_fail_closed() {
+    // Each expression exercises a missing, unknown, operation-invalid, or
+    // conflicting term. A known CLONE_FS neighbour must not override that gap.
+    // Acceptance mistakes outside this table still require separate real probes.
     for expression in [
         "0x80",
         "0x8000000000000000",
@@ -370,6 +746,90 @@ fn syscall_specific_flag_decoders_fail_closed() {
 }
 
 #[test]
+fn legacy_parent_signal_is_not_a_clone3_exit_signal_conflict() {
+    for flags in [
+        "CLONE_PARENT|SIGCHLD",
+        "CLONE_FS|CLONE_PARENT|SIGCHLD",
+        "0x8211",
+    ] {
+        let p = observed(&format!("1 clone(flags={flags}) = 2\n"), "2");
+        assert!(p.warnings.is_empty(), "{flags}: {:?}", p.warnings);
+        assert!(!p.events[1].context_uncertain, "{flags}");
+    }
+    for flags in ["CLONE_PARENT", "CLONE_VM|CLONE_SIGHAND|CLONE_THREAD"] {
+        let accepted = observed(
+            &format!("1 clone3({{flags={flags}, exit_signal=0}}, 88) = 2\n"),
+            "2",
+        );
+        assert!(
+            accepted.warnings.is_empty(),
+            "{flags}: {:?}",
+            accepted.warnings
+        );
+        assert!(!accepted.events[1].context_uncertain);
+        let p = observed(
+            &format!("1 clone3({{flags={flags}, exit_signal=SIGCHLD}}, 88) = 2\n"),
+            "2",
+        );
+        assert!(p.warnings.iter().any(|w| w.contains("fs.context:")));
+        assert!(p.events[1].context_uncertain);
+    }
+}
+
+#[test]
+fn mixed_transition_events_keep_insertion_order_and_raw_coordinates() {
+    let p = parse_with_cwd(
+        concat!(
+            "1 execve(\"/tool\", [], 0) = 0\n",
+            "1 clone(flags=CLONE_FS|SIGCHLD <unfinished ...>\n",
+            "2 chdir(\"/B\") = 0\n",
+            "1 <... clone resumed>) = 2\n",
+            "1 unshare(CLONE_FS) = 0\n",
+            "2 chdir(\"/C\") = 0\n",
+            "1 open(\"/input\", O_RDONLY) = -1 ENOENT (No file)\n",
+            "2 +++ exited with 0 +++\n",
+            "1 +++ exited with 0 +++\n",
+        ),
+        "raw/trace.log",
+        Some("/A"),
+    );
+    assert!(p.warnings.is_empty(), "{:?}", p.warnings);
+    assert_eq!(p.lines, 9);
+    let observations = p
+        .events
+        .iter()
+        .map(|e| {
+            (
+                e.operation.as_str(),
+                e.evidence.line,
+                e.evidence.end_line,
+                e.cwd_before.as_deref(),
+                e.outcome.as_str(),
+                e.context_uncertain,
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        observations,
+        [
+            ("execve", 1, 1, Some("/A"), "success", false),
+            ("chdir", 3, 3, Some("/A"), "success", false),
+            ("clone", 2, 4, Some("/A"), "success", false),
+            ("unshare", 5, 5, Some("/B"), "success", false),
+            ("chdir", 6, 6, Some("/B"), "success", false),
+            ("open", 7, 7, Some("/B"), "ENOENT", false),
+            ("exit", 8, 8, Some("/C"), "+++ exited with 0 +++", false),
+            ("exit", 9, 9, Some("/B"), "+++ exited with 0 +++", false),
+        ]
+    );
+    assert!(
+        p.events
+            .iter()
+            .all(|e| e.schema_version == 2 && e.evidence.file == "raw/trace.log")
+    );
+}
+
+#[test]
 fn all_recognized_namespace_flags_have_typed_effects() {
     for flag in [
         "CLONE_NEWNS",
@@ -416,7 +876,14 @@ fn all_recognized_namespace_flags_have_typed_effects() {
     ] {
         assert_eq!(
             decode_unshare_flags(flag),
-            UnshareEffect::SplitFsNamespaceUncertain,
+            if matches!(
+                flag,
+                "CLONE_NEWUSER" | "CLONE_NEWNS" | "UNSHARE_EMPTY_MNTNS"
+            ) {
+                UnshareEffect::SplitFsNamespaceUncertain
+            } else {
+                UnshareEffect::ConnectedFsNamespaceUncertain
+            },
             "unshare {flag}"
         );
     }
@@ -452,13 +919,13 @@ fn clone_namespace_uncertainty_is_scoped_to_the_new_child() {
 }
 
 #[test]
-fn unshare_namespace_uncertainty_is_scoped_to_the_caller() {
+fn proved_unshare_namespace_split_scopes_uncertainty_to_the_caller() {
     let p = parse_with_cwd(
         concat!(
             "1 execve(\"/tool\", [], 0) = 0\n",
             "1 clone(flags=CLONE_FS|SIGCHLD) = 2\n",
             "1 clone(flags=CLONE_FS|SIGCHLD) = 3\n",
-            "2 unshare(CLONE_NEWNET) = 0\n",
+            "2 unshare(CLONE_FS|CLONE_NEWNET) = 0\n",
             "2 open(\"/caller\", O_RDONLY) = 3\n",
             "1 open(\"/parent\", O_RDONLY) = 3\n",
             "3 open(\"/sibling\", O_RDONLY) = 3\n",
@@ -475,13 +942,77 @@ fn unshare_namespace_uncertainty_is_scoped_to_the_caller() {
 }
 
 #[test]
-fn unfinished_unshare_namespace_keeps_the_old_group_certain() {
+fn namespace_only_unshare_keeps_connected_fs_uncertain_and_private_branch_known() {
+    for flags in [
+        "CLONE_NEWTIME",
+        "CLONE_NEWCGROUP",
+        "CLONE_NEWUTS",
+        "CLONE_NEWIPC",
+        "CLONE_NEWPID",
+        "CLONE_NEWNET",
+        "0x40000000",
+    ] {
+        let p = parse_with_cwd(
+            &format!(
+                "1 execve(\"/tool\", [], 0) = 0\n1 fork() = 3\n1 clone(flags=CLONE_FS|SIGCHLD) = 2\n2 unshare({flags}) = 0\n2 chdir(\"/B\") = 0\n1 open(\"/parent\", O_RDONLY) = 3\n2 open(\"/caller\", O_RDONLY) = 3\n3 open(\"/private\", O_RDONLY) = 3\n"
+            ),
+            "trace",
+            Some("/A"),
+        );
+        for line in [4, 5, 6, 7] {
+            assert!(event_at(&p, line).context_uncertain, "{flags}: {line}");
+        }
+        assert!(!event_at(&p, 8).context_uncertain, "{flags}");
+        assert_eq!(event_at(&p, 8).cwd_before.as_deref(), Some("/A"));
+        assert_eq!(p.warnings.len(), 1, "{flags}: {:?}", p.warnings);
+        assert!(p.warnings[0].starts_with("trace:4: fs.context:"));
+    }
+}
+
+#[test]
+fn namespace_only_unshare_invalidates_pending_context_evidence_without_splitting() {
+    let p = parse_with_cwd(
+        concat!(
+            "1 execve(\"/tool\", [], 0) = 0\n",
+            "1 fork() = 4\n",
+            "1 clone(flags=CLONE_FS|SIGCHLD) = 2\n",
+            "1 clone(flags=CLONE_FS|SIGCHLD) = 3\n",
+            "1 chdir(\"/B\" <unfinished ...>\n",
+            "2 unshare(CLONE_NEWNET <unfinished ...>\n",
+            "3 open(\"/sibling-during\", O_RDONLY) = 3\n",
+            "1 <... chdir resumed>) = 0\n",
+            "2 <... unshare resumed>) = 0\n",
+            "2 chdir(\"/C\") = 0\n",
+            "1 open(\"/parent\", O_RDONLY) = 3\n",
+            "4 open(\"/private\", O_RDONLY) = 3\n",
+        ),
+        "trace",
+        Some("/A"),
+    );
+    for line in [5, 6, 7, 10, 11] {
+        assert!(event_at(&p, line).context_uncertain, "line {line}");
+    }
+    for line in [7, 10, 11] {
+        assert_eq!(event_at(&p, line).cwd_before, None, "line {line}");
+    }
+    assert_eq!(event_at(&p, 5).evidence.end_line, 8);
+    assert_eq!(event_at(&p, 6).evidence.end_line, 9);
+    assert!(!event_at(&p, 12).context_uncertain);
+    assert_eq!(event_at(&p, 12).cwd_before.as_deref(), Some("/A"));
+    assert_eq!(p.warnings.len(), 1);
+    assert!(p.warnings[0].starts_with("trace:6: fs.context:"));
+}
+
+#[test]
+fn unfinished_proved_unshare_namespace_split_keeps_the_old_group_certain() {
+    // The caller's new namespace is already uncertain. Its entry/return interval
+    // does not erase the old shared group's independently observed context.
     let p = parse_with_cwd(
         concat!(
             "1 execve(\"/tool\", [], 0) = 0\n",
             "1 clone(flags=CLONE_FS|SIGCHLD) = 2\n",
             "1 clone(flags=CLONE_FS|SIGCHLD) = 3\n",
-            "2 unshare(CLONE_NEWNET <unfinished ...>\n",
+            "2 unshare(CLONE_FS|CLONE_NEWNET <unfinished ...>\n",
             "3 open(\"/sibling-during-unshare\", O_RDONLY) = 3\n",
             "2 <... unshare resumed>) = 0\n",
             "2 open(\"/caller-after-unshare\", O_RDONLY) = 3\n",
@@ -500,6 +1031,9 @@ fn unfinished_unshare_namespace_keeps_the_old_group_certain() {
 
 #[test]
 fn namespace_branch_absorbs_overlapping_source_cwd_uncertainty() {
+    // An uncertain namespace branch does not need an exact source-copy instant.
+    // Preserve the old group's settled CWD fact while keeping only the detached
+    // child/caller uncertain; ordinary private-copy windows differ below.
     let cloned = parse_with_cwd(
         concat!(
             "1 execve(\"/tool\", [], 0) = 0\n",
@@ -526,7 +1060,7 @@ fn namespace_branch_absorbs_overlapping_source_cwd_uncertainty() {
             "1 clone(flags=CLONE_FS|SIGCHLD) = 2\n",
             "1 clone(flags=CLONE_FS|SIGCHLD) = 3\n",
             "1 chdir(\"/B\" <unfinished ...>\n",
-            "2 unshare(CLONE_NEWNET) = 0\n",
+            "2 unshare(CLONE_FS|CLONE_NEWNET) = 0\n",
             "1 <... chdir resumed>) = 0\n",
             "3 open(\"/old-group-sibling\", O_RDONLY) = 3\n",
             "2 open(\"/namespace-caller\", O_RDONLY) = 3\n",
@@ -610,6 +1144,9 @@ fn successful_pivot_root_invalidates_all_active_contexts() {
 
 #[test]
 fn mount_operations_are_global_only_on_success() {
+    // Namespace membership is not modeled, so a successful topology change
+    // invalidates private branches too. Its failed counterpart must remain an
+    // observation and allow a later verified CWD transition in the shared group.
     let operations = [
         "mount(\"none\", \"/mnt\", \"tmpfs\", 0, NULL)",
         "umount2(\"/mnt\", MNT_DETACH)",
@@ -695,6 +1232,8 @@ fn successful_unshare_splits_but_failure_keeps_alias() {
 }
 #[test]
 fn exec_does_not_unshare_fs() {
+    // This freezes ordinary exec's context preservation on both outcomes. It
+    // does not cover non-leader-thread exec's unsupported task-ID migration.
     for ret in ["0", "-1 ENOENT (missing)"] {
         let p = observed(
             &format!(
@@ -752,6 +1291,9 @@ fn unfinished_clone_allows_child_activity_before_resume() {
 
 #[test]
 fn private_fork_snapshot_overlap_fails_closed() {
+    // The source changes CWD while the fork's copy instant is unproved. A child's
+    // later absolute FD annotation can establish that access spelling, but it
+    // cannot recover the missing snapshot relationship or source CWD history.
     let p = parse_with_cwd(
         concat!(
             "1 execve(\"/tool\", [], 0) = 0\n",
@@ -782,6 +1324,8 @@ fn private_fork_snapshot_overlap_fails_closed() {
 
 #[test]
 fn private_fork_snapshot_bound_accepts_child_before_resume_and_later_transition() {
+    // First child activity closes the copy window. A later source CWD change
+    // must not make the already-created private child's old context ambiguous.
     let p = parse_with_cwd(
         concat!(
             "1 execve(\"/tool\", [], 0) = 0\n",
@@ -804,6 +1348,8 @@ fn private_fork_snapshot_bound_accepts_child_before_resume_and_later_transition(
 
 #[test]
 fn concurrent_private_forks_without_a_context_transition_are_accepted() {
+    // Two overlapping creation windows alone are not a CWD conflict. This keeps
+    // concurrency from being mistaken for evidence of an invalid snapshot.
     let p = parse_with_cwd(
         concat!(
             "1 execve(\"/tool\", [], 0) = 0\n",
@@ -829,6 +1375,9 @@ fn concurrent_private_forks_without_a_context_transition_are_accepted() {
 
 #[test]
 fn multiple_pending_forks_invalidate_only_the_still_open_window() {
+    // One child closes its window early while the other is still pending. A
+    // later CWD change must invalidate only the unresolved copy; a single stored
+    // pending fork would lose this distinction by overwriting an earlier window.
     let p = parse_with_cwd(
         concat!(
             "1 execve(\"/tool\", [], 0) = 0\n",
@@ -882,6 +1431,9 @@ fn failed_transition_does_not_invalidate_a_pending_fork_snapshot() {
 
 #[test]
 fn private_fork_snapshot_detects_other_context_transitions() {
+    // CWD changes are not the only source of snapshot ambiguity. Splitting or
+    // changing root/namespace inside the same window also prevents guessing
+    // which source context the child copied.
     for transition in [
         "unshare(CLONE_FS)",
         "unshare(CLONE_NEWNET)",
@@ -947,6 +1499,8 @@ fn unknown_flags_and_namespace_changes_remain_uncertain() {
 }
 #[test]
 fn rename_safety_and_returned_fd_observation_take_priority() {
+    // A same-syscall FD annotation outranks an old CWD spelling for this open.
+    // It cannot authorize a historical-CWD fallback for the following access.
     let p = parse_with_cwd(
         concat!(
             "1 clone(flags=CLONE_FS|SIGCHLD) = 2\n",
@@ -969,6 +1523,9 @@ fn rename_safety_and_returned_fd_observation_take_priority() {
 }
 #[test]
 fn overlapping_cwd_changes_are_not_serialized_as_proven() {
+    // Return-print order cannot settle two shared CWD transitions whose entry
+    // intervals overlap. Keeping the last printed path as certain would invent
+    // a kernel ordering that these raw rows do not establish.
     let p = observed(
         "1 clone(flags=CLONE_FS|SIGCHLD) = 2\n1 chdir(\"/C\" <unfinished ...>\n2 chdir(\"/B\") = 0\n1 <... chdir resumed>) = 0\n",
         "2",

@@ -1,0 +1,48 @@
+{
+  "schema_version": 4,
+  "observed_differences": true,
+  "reliability": {
+    "left": {
+      "capture": "complete",
+      "storage": "verified"
+    },
+    "right": {
+      "capture": "complete",
+      "storage": "verified"
+    }
+  },
+  "exit_code": 1,
+  "errors": [],
+  "left": "baseline-left",
+  "right": "baseline-right",
+  "left_id": "abc001-101",
+  "right_id": "abc002-102",
+  "changes": [
+    {
+      "category": "File access outcome changes",
+      "subject": "/baseline/input.txt (openat)",
+      "detail_group": null,
+      "left": [
+        "success"
+      ],
+      "right": [
+        "ENOENT"
+      ],
+      "left_evidence": [
+        {
+          "file": "raw/trace.log",
+          "line": 1,
+          "end_line": 1
+        }
+      ],
+      "right_evidence": [
+        {
+          "file": "raw/trace.log",
+          "line": 1,
+          "end_line": 1
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

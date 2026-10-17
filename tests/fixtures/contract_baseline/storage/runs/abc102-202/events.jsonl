@@ -1,0 +1,1 @@
+{"schema_version":2,"pid":"202","kind":"file","operation":"openat","path":"/baseline/input.txt","outcome":"success","evidence":{"file":"raw/trace.log","line":1,"end_line":1},"argv":null,"child_pid":null,"cwd_before":"/baseline","context_uncertain":false}

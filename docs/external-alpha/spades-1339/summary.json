@@ -1,0 +1,174 @@
+{
+  "schema_version": 4,
+  "observed_differences": true,
+  "reliability": {
+    "left": {
+      "capture": "incomplete",
+      "storage": "verified"
+    },
+    "right": {
+      "capture": "incomplete",
+      "storage": "verified"
+    }
+  },
+  "exit_code": 3,
+  "errors": [],
+  "warnings": [
+    "good-v3: state=completed, 1 parser warnings; inspect metadata.json",
+    "bad-v3: state=completed, 1 parser warnings; inspect metadata.json"
+  ],
+  "total_changes": 3659,
+  "categories": {
+    "Exit status": 1,
+    "Initial working directory": 1,
+    "Command arguments": 1,
+    "Executable changes": 9,
+    "New file access": 226,
+    "Execution attempt changes": 3,
+    "Removed file access": 3418
+  },
+  "detail_group_candidates": 150,
+  "top_five": [
+    {
+      "rank": 1,
+      "category": "Exit status",
+      "subject": "",
+      "detail_group": null,
+      "left": [
+        "code=Some(0), signal=None"
+      ],
+      "right": [
+        "code=Some(4), signal=None"
+      ],
+      "left_evidence": [],
+      "right_evidence": []
+    },
+    {
+      "rank": 2,
+      "category": "Initial working directory",
+      "subject": "",
+      "detail_group": null,
+      "left": [
+        "${WORK}/spades/runtime/bin"
+      ],
+      "right": [
+        "${WORK}/spades/runtime with spaces/bin"
+      ],
+      "left_evidence": [],
+      "right_evidence": []
+    },
+    {
+      "rank": 3,
+      "category": "Command arguments",
+      "subject": "",
+      "detail_group": null,
+      "left": [
+        "[\"${WORK}/spades/install/SPAdes-4.0.0-Linux/bin/spades.py\", \"--test\", \"--careful\"]"
+      ],
+      "right": [
+        "[\"${WORK}/spades/install with spaces/SPAdes-4.0.0-Linux/bin/spades.py\", \"--test\", \"--careful\"]"
+      ],
+      "left_evidence": [],
+      "right_evidence": []
+    },
+    {
+      "rank": 4,
+      "category": "Executable changes",
+      "subject": "${WORK}/spades/install with spaces/SPAdes-4.0.0-Linux/bin/spades-hammer (execve)",
+      "detail_group": null,
+      "left": [],
+      "right": [
+        "success"
+      ],
+      "left_evidence": [],
+      "right_evidence": [
+        {
+          "file": "raw/trace.log",
+          "line": 529,
+          "end_line": 531
+        }
+      ]
+    },
+    {
+      "rank": 5,
+      "category": "Executable changes",
+      "subject": "${WORK}/spades/install with spaces/SPAdes-4.0.0-Linux/bin/spades.py (execve)",
+      "detail_group": null,
+      "left": [],
+      "right": [
+        "success"
+      ],
+      "left_evidence": [],
+      "right_evidence": [
+        {
+          "file": "raw/trace.log",
+          "line": 1,
+          "end_line": 1
+        }
+      ]
+    }
+  ],
+  "selected_later_observations": [],
+  "runs": {
+    "good-v3": {
+      "name": "good-v3",
+      "schema_version": 3,
+      "tool_version": "0.1.0",
+      "command": [
+        "${WORK}/spades/install/SPAdes-4.0.0-Linux/bin/spades.py",
+        "--test",
+        "--careful"
+      ],
+      "cwd": "${WORK}/spades/runtime/bin",
+      "backend": "strace -- version 6.16",
+      "state": "completed",
+      "exit_code": 0,
+      "signal": null,
+      "collector_exit_code": 0,
+      "collector_signal": null,
+      "target_exit_raw": "+++ exited with 0 +++",
+      "completeness": "partial",
+      "parsed_events": 15587,
+      "raw_lines": 24587,
+      "warnings": [
+        "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+      ],
+      "environment": {},
+      "record_cli_exit_code": 0,
+      "storage_integrity": {
+        "status": "verified",
+        "detail": "metadata and events match finalized byte counts, event count and SHA-256; raw logs are not checksummed"
+      }
+    },
+    "bad-v3": {
+      "name": "bad-v3",
+      "schema_version": 3,
+      "tool_version": "0.1.0",
+      "command": [
+        "${WORK}/spades/install with spaces/SPAdes-4.0.0-Linux/bin/spades.py",
+        "--test",
+        "--careful"
+      ],
+      "cwd": "${WORK}/spades/runtime with spaces/bin",
+      "backend": "strace -- version 6.16",
+      "state": "completed",
+      "exit_code": 4,
+      "signal": null,
+      "collector_exit_code": 4,
+      "collector_signal": null,
+      "target_exit_raw": "+++ exited with 4 +++",
+      "completeness": "partial",
+      "parsed_events": 585,
+      "raw_lines": 591,
+      "warnings": [
+        "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+      ],
+      "environment": {},
+      "record_cli_exit_code": 4,
+      "storage_integrity": {
+        "status": "verified",
+        "detail": "metadata and events match finalized byte counts, event count and SHA-256; raw logs are not checksummed"
+      }
+    }
+  }
+}

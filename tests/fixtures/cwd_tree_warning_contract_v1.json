@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "sha256": {
+    "tests/cwd_tree_warning_contract.py": "10ebe43f7c2e149bca947b9207d433791fbe187ec3ad8431237c29d99b06f1d4",
+    "tests/test_cwd_tree_warning_contract.py": "40d657641c4af4fdee0f2e9fc7eeb5e7ef771790f14b9e2aafa0a5d2a136799a"
+  }
+}

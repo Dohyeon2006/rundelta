@@ -1,0 +1,599 @@
+{
+  "schema_version": 1,
+  "plan_sha256": "0490289557a5bbd9bc2cfc9af300a5e504ccd9b198f32e8a0cc9440d3f453e5c",
+  "binary_sha256": "b5ece2af27ddd485e43d3eed650ce30b45aa466bc3595094877a924d2e535d16",
+  "analysis_sha256": {
+    "view.py": "085f1fd2e776e0d0f50441b0c6b8e4699b3f0102b2b4d1755dd4a8e6c8439f86",
+    "audit.py": "5978c8e4cfdba985326a87a08de17ad80b5f902c2e1d5f4ab215a844a7138f81",
+    "test_view.py": "21cad74caa067afa8deba4fe035d8731c44b9c7ece3d4834438faf6237a5d510",
+    "collect.py": "64a0237af13d9a888009b3d306af4392c1ee7270f9266c01862d7874b75a877e"
+  },
+  "originals_unchanged_during_audit": true,
+  "original_files_checked": 52,
+  "original_json": [
+    {
+      "file": "cargo-abnormal.json",
+      "sha256": "d3646b2d5b25e401aa0b4e517d660448542431afa32db0dcb05d41affa2c9e1f"
+    },
+    {
+      "file": "cargo-bad.show.json",
+      "sha256": "e14010745d007b0ed4b30321bb72382f138081edf4075af460252d18d078b193"
+    },
+    {
+      "file": "cargo-good.show.json",
+      "sha256": "d00c2ed6c5a11cd3c8e27f54f16c2eda997497e800d90daacad036bd5b297874"
+    },
+    {
+      "file": "cargo-normal.json",
+      "sha256": "0588587e5fd2eead01801cac7cb5256ab065eb1ebd9153c7965c8666bf93703a"
+    },
+    {
+      "file": "cargo-repeat.show.json",
+      "sha256": "88c07317bfc1ded781204a5a20de0280ebf15fe9593f1bc283a16fa42a8ab3fb"
+    },
+    {
+      "file": "cmake-abnormal.json",
+      "sha256": "72f35aac0cf2b99f6f6c03292db29862a5bb8c82ac9e5ab708c281925c68162c"
+    },
+    {
+      "file": "cmake-bad.show.json",
+      "sha256": "975ff2cace68e2653dacc0eded63597ec21df2ffb3059f06400f06365d8fd700"
+    },
+    {
+      "file": "cmake-good.show.json",
+      "sha256": "f1fd27fe5687b7fe69aa84e4c58e91e23c8b8bb81972b41c45865a41fea4ba45"
+    },
+    {
+      "file": "cmake-normal.json",
+      "sha256": "2f1e1d8eb189da4518cd6a45b1c1b93c89c91b1d1e4bd1c19afdb0d619ec5d02"
+    },
+    {
+      "file": "cmake-repeat.show.json",
+      "sha256": "a0b3da4bed8599a9ec3301035df60fbfe3850efd8ad61e106a2cb070fd384909"
+    },
+    {
+      "file": "pip-abnormal.json",
+      "sha256": "8f3724a8d1b88e6754ed3b8dd43eb50fb75e4e3e879b410a69ebf9b74f7dec32"
+    },
+    {
+      "file": "pip-bad.show.json",
+      "sha256": "28559b28272d685ea8266323adf0cd4dd0055b7fe6a18c786837ace3944a507b"
+    },
+    {
+      "file": "pip-good.show.json",
+      "sha256": "ff244b23588f0d84e2fe57f37e08085ee268f8c1f1e0b6d16d37f12cb30a49f1"
+    },
+    {
+      "file": "pip-normal.json",
+      "sha256": "c13f5439e9139eda25bb34410a752a920285b8d5e56cd3ae2f24653f0c4f4d19"
+    },
+    {
+      "file": "pip-repeat.show.json",
+      "sha256": "df6c3f6e47a40482660a69aca4158811878f15bb683d32cb4f82a296fb29dfa2"
+    }
+  ],
+  "results": [
+    {
+      "case": "cmake",
+      "comparison": "normal",
+      "raw_changes": 162,
+      "raw_clue_ranks": [],
+      "reliability": {
+        "left": {
+          "capture": "complete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "complete",
+          "storage": "verified"
+        }
+      },
+      "diff_exit_code": 1,
+      "measurements": {
+        "r1": {
+          "view_entries": 159,
+          "groups": 1,
+          "single_entries": 158,
+          "clue_ranks": [],
+          "clue_in_first_five": null,
+          "clue_folded": false,
+          "clue_demoted": false,
+          "clue_missing": false,
+          "detail_event_count": 6,
+          "group_members": [
+            {
+              "rule": "R1-recurring-generated-family",
+              "raw_indices_zero_based": [
+                14,
+                15,
+                80,
+                81
+              ],
+              "evidence": {
+                "operation": "openat",
+                "left_instances": 2,
+                "right_instances": 2,
+                "calls_per_path": [
+                  1,
+                  2
+                ],
+                "same_process_within_each_run": true,
+                "write_witness": "successful O_CREAT with O_EXCL or O_TRUNC on every member"
+              }
+            }
+          ]
+        },
+        "r2": {
+          "view_entries": 162,
+          "groups": 0,
+          "single_entries": 162,
+          "clue_ranks": [],
+          "clue_in_first_five": null,
+          "clue_folded": false,
+          "clue_demoted": false,
+          "clue_missing": false,
+          "detail_event_count": 0,
+          "group_members": []
+        },
+        "both": {
+          "view_entries": 159,
+          "groups": 1,
+          "single_entries": 158,
+          "clue_ranks": [],
+          "clue_in_first_five": null,
+          "clue_folded": false,
+          "clue_demoted": false,
+          "clue_missing": false,
+          "detail_event_count": 6,
+          "group_members": [
+            {
+              "rule": "R1-recurring-generated-family",
+              "raw_indices_zero_based": [
+                14,
+                15,
+                80,
+                81
+              ],
+              "evidence": {
+                "operation": "openat",
+                "left_instances": 2,
+                "right_instances": 2,
+                "calls_per_path": [
+                  1,
+                  2
+                ],
+                "same_process_within_each_run": true,
+                "write_witness": "successful O_CREAT with O_EXCL or O_TRUNC on every member"
+              }
+            }
+          ]
+        }
+      },
+      "raw_json_sha256": "2f1e1d8eb189da4518cd6a45b1c1b93c89c91b1d1e4bd1c19afdb0d619ec5d02",
+      "classification": "actual capture and view audit",
+      "target_exit_codes": {
+        "good": 0,
+        "repeat": 0,
+        "bad": 2
+      }
+    },
+    {
+      "case": "cmake",
+      "comparison": "abnormal",
+      "raw_changes": 174,
+      "raw_clue_ranks": [
+        2
+      ],
+      "reliability": {
+        "left": {
+          "capture": "complete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "complete",
+          "storage": "verified"
+        }
+      },
+      "diff_exit_code": 1,
+      "measurements": {
+        "r1": {
+          "view_entries": 171,
+          "groups": 1,
+          "single_entries": 170,
+          "clue_ranks": [
+            2
+          ],
+          "clue_in_first_five": true,
+          "clue_folded": false,
+          "clue_demoted": false,
+          "clue_missing": false,
+          "detail_event_count": 6,
+          "group_members": [
+            {
+              "rule": "R1-recurring-generated-family",
+              "raw_indices_zero_based": [
+                13,
+                14,
+                79,
+                80
+              ],
+              "evidence": {
+                "operation": "openat",
+                "left_instances": 2,
+                "right_instances": 2,
+                "calls_per_path": [
+                  1,
+                  2
+                ],
+                "same_process_within_each_run": true,
+                "write_witness": "successful O_CREAT with O_EXCL or O_TRUNC on every member"
+              }
+            }
+          ]
+        },
+        "r2": {
+          "view_entries": 174,
+          "groups": 0,
+          "single_entries": 174,
+          "clue_ranks": [
+            2
+          ],
+          "clue_in_first_five": true,
+          "clue_folded": false,
+          "clue_demoted": false,
+          "clue_missing": false,
+          "detail_event_count": 0,
+          "group_members": []
+        },
+        "both": {
+          "view_entries": 171,
+          "groups": 1,
+          "single_entries": 170,
+          "clue_ranks": [
+            2
+          ],
+          "clue_in_first_five": true,
+          "clue_folded": false,
+          "clue_demoted": false,
+          "clue_missing": false,
+          "detail_event_count": 6,
+          "group_members": [
+            {
+              "rule": "R1-recurring-generated-family",
+              "raw_indices_zero_based": [
+                13,
+                14,
+                79,
+                80
+              ],
+              "evidence": {
+                "operation": "openat",
+                "left_instances": 2,
+                "right_instances": 2,
+                "calls_per_path": [
+                  1,
+                  2
+                ],
+                "same_process_within_each_run": true,
+                "write_witness": "successful O_CREAT with O_EXCL or O_TRUNC on every member"
+              }
+            }
+          ]
+        }
+      },
+      "raw_json_sha256": "72f35aac0cf2b99f6f6c03292db29862a5bb8c82ac9e5ab708c281925c68162c",
+      "classification": "actual capture and view audit",
+      "target_exit_codes": {
+        "good": 0,
+        "repeat": 0,
+        "bad": 2
+      }
+    },
+    {
+      "case": "cargo",
+      "comparison": "normal",
+      "raw_changes": 76,
+      "raw_clue_ranks": [],
+      "reliability": {
+        "left": {
+          "capture": "incomplete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "incomplete",
+          "storage": "verified"
+        }
+      },
+      "diff_exit_code": 3,
+      "measurements": {
+        "r1": {
+          "view_entries": 73,
+          "groups": 1,
+          "single_entries": 72,
+          "clue_ranks": [],
+          "clue_in_first_five": null,
+          "clue_folded": false,
+          "clue_demoted": false,
+          "clue_missing": false,
+          "detail_event_count": 4,
+          "group_members": [
+            {
+              "rule": "R1-recurring-generated-family",
+              "raw_indices_zero_based": [
+                10,
+                11,
+                28,
+                29
+              ],
+              "evidence": {
+                "operation": "openat",
+                "left_instances": 2,
+                "right_instances": 2,
+                "calls_per_path": [
+                  1,
+                  1
+                ],
+                "same_process_within_each_run": true,
+                "write_witness": "successful O_CREAT with O_EXCL or O_TRUNC on every member"
+              }
+            }
+          ]
+        },
+        "r2": {
+          "view_entries": 76,
+          "groups": 0,
+          "single_entries": 76,
+          "clue_ranks": [],
+          "clue_in_first_five": null,
+          "clue_folded": false,
+          "clue_demoted": false,
+          "clue_missing": false,
+          "detail_event_count": 0,
+          "group_members": []
+        },
+        "both": {
+          "view_entries": 73,
+          "groups": 1,
+          "single_entries": 72,
+          "clue_ranks": [],
+          "clue_in_first_five": null,
+          "clue_folded": false,
+          "clue_demoted": false,
+          "clue_missing": false,
+          "detail_event_count": 4,
+          "group_members": [
+            {
+              "rule": "R1-recurring-generated-family",
+              "raw_indices_zero_based": [
+                10,
+                11,
+                28,
+                29
+              ],
+              "evidence": {
+                "operation": "openat",
+                "left_instances": 2,
+                "right_instances": 2,
+                "calls_per_path": [
+                  1,
+                  1
+                ],
+                "same_process_within_each_run": true,
+                "write_witness": "successful O_CREAT with O_EXCL or O_TRUNC on every member"
+              }
+            }
+          ]
+        }
+      },
+      "raw_json_sha256": "0588587e5fd2eead01801cac7cb5256ab065eb1ebd9153c7965c8666bf93703a",
+      "classification": "actual capture and view audit",
+      "target_exit_codes": {
+        "good": 0,
+        "repeat": 0,
+        "bad": 101
+      }
+    },
+    {
+      "case": "cargo",
+      "comparison": "abnormal",
+      "raw_changes": 255,
+      "raw_clue_ranks": [
+        2
+      ],
+      "reliability": {
+        "left": {
+          "capture": "incomplete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "incomplete",
+          "storage": "verified"
+        }
+      },
+      "diff_exit_code": 3,
+      "measurements": {
+        "r1": {
+          "view_entries": 255,
+          "groups": 0,
+          "single_entries": 255,
+          "clue_ranks": [
+            2
+          ],
+          "clue_in_first_five": true,
+          "clue_folded": false,
+          "clue_demoted": false,
+          "clue_missing": false,
+          "detail_event_count": 0,
+          "group_members": []
+        },
+        "r2": {
+          "view_entries": 255,
+          "groups": 0,
+          "single_entries": 255,
+          "clue_ranks": [
+            2
+          ],
+          "clue_in_first_five": true,
+          "clue_folded": false,
+          "clue_demoted": false,
+          "clue_missing": false,
+          "detail_event_count": 0,
+          "group_members": []
+        },
+        "both": {
+          "view_entries": 255,
+          "groups": 0,
+          "single_entries": 255,
+          "clue_ranks": [
+            2
+          ],
+          "clue_in_first_five": true,
+          "clue_folded": false,
+          "clue_demoted": false,
+          "clue_missing": false,
+          "detail_event_count": 0,
+          "group_members": []
+        }
+      },
+      "raw_json_sha256": "d3646b2d5b25e401aa0b4e517d660448542431afa32db0dcb05d41affa2c9e1f",
+      "classification": "actual capture and view audit",
+      "target_exit_codes": {
+        "good": 0,
+        "repeat": 0,
+        "bad": 101
+      }
+    },
+    {
+      "case": "pip",
+      "comparison": "normal",
+      "raw_changes": 36,
+      "raw_clue_ranks": [],
+      "reliability": {
+        "left": {
+          "capture": "incomplete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "incomplete",
+          "storage": "verified"
+        }
+      },
+      "diff_exit_code": 3,
+      "measurements": {
+        "r1": {
+          "view_entries": 36,
+          "groups": 0,
+          "single_entries": 36,
+          "clue_ranks": [],
+          "clue_in_first_five": null,
+          "clue_folded": false,
+          "clue_demoted": false,
+          "clue_missing": false,
+          "detail_event_count": 0,
+          "group_members": []
+        },
+        "r2": {
+          "view_entries": 36,
+          "groups": 0,
+          "single_entries": 36,
+          "clue_ranks": [],
+          "clue_in_first_five": null,
+          "clue_folded": false,
+          "clue_demoted": false,
+          "clue_missing": false,
+          "detail_event_count": 0,
+          "group_members": []
+        },
+        "both": {
+          "view_entries": 36,
+          "groups": 0,
+          "single_entries": 36,
+          "clue_ranks": [],
+          "clue_in_first_five": null,
+          "clue_folded": false,
+          "clue_demoted": false,
+          "clue_missing": false,
+          "detail_event_count": 0,
+          "group_members": []
+        }
+      },
+      "raw_json_sha256": "c13f5439e9139eda25bb34410a752a920285b8d5e56cd3ae2f24653f0c4f4d19",
+      "classification": "actual capture and view audit",
+      "target_exit_codes": {
+        "good": 0,
+        "repeat": 0,
+        "bad": 1
+      }
+    },
+    {
+      "case": "pip",
+      "comparison": "abnormal",
+      "raw_changes": 27,
+      "raw_clue_ranks": [
+        2
+      ],
+      "reliability": {
+        "left": {
+          "capture": "incomplete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "incomplete",
+          "storage": "verified"
+        }
+      },
+      "diff_exit_code": 3,
+      "measurements": {
+        "r1": {
+          "view_entries": 27,
+          "groups": 0,
+          "single_entries": 27,
+          "clue_ranks": [
+            2
+          ],
+          "clue_in_first_five": true,
+          "clue_folded": false,
+          "clue_demoted": false,
+          "clue_missing": false,
+          "detail_event_count": 0,
+          "group_members": []
+        },
+        "r2": {
+          "view_entries": 27,
+          "groups": 0,
+          "single_entries": 27,
+          "clue_ranks": [
+            2
+          ],
+          "clue_in_first_five": true,
+          "clue_folded": false,
+          "clue_demoted": false,
+          "clue_missing": false,
+          "detail_event_count": 0,
+          "group_members": []
+        },
+        "both": {
+          "view_entries": 27,
+          "groups": 0,
+          "single_entries": 27,
+          "clue_ranks": [
+            2
+          ],
+          "clue_in_first_five": true,
+          "clue_folded": false,
+          "clue_demoted": false,
+          "clue_missing": false,
+          "detail_event_count": 0,
+          "group_members": []
+        }
+      },
+      "raw_json_sha256": "8f3724a8d1b88e6754ed3b8dd43eb50fb75e4e3e879b410a69ebf9b74f7dec32",
+      "classification": "actual capture and view audit",
+      "target_exit_codes": {
+        "good": 0,
+        "repeat": 0,
+        "bad": 1
+      }
+    }
+  ]
+}

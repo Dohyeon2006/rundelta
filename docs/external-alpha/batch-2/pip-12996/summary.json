@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "case": "pip-12996",
+  "preregistration_sha256": "d46bc440f649413d3dc61362465d2b4c9b82f069dd26619fab1247b640b5cbb9",
+  "original_issue_reproduction": "original issue symptom 2: configuration query",
+  "target_symptom_matched": true,
+  "control_valid": true,
+  "command": [
+    "${WORK}/tools/pip-24.2/bin/pip",
+    "config",
+    "get",
+    "install.constraint"
+  ],
+  "cwd": "${CASE}",
+  "selected_startup_environment": [],
+  "changed_environment": [
+    {
+      "key": "PIP_CONFIG_FILE",
+      "good": "",
+      "bad": "${CASE}/override.conf"
+    }
+  ],
+  "source_tools_unchanged": true,
+  "fixtures_unchanged": true,
+  "phases": {
+    "good": {
+      "state": "completed",
+      "target_exit": 0,
+      "target_signal": null,
+      "collector_exit": 0,
+      "collector_signal": null,
+      "capture": "complete_for_supported_events",
+      "storage": "verified",
+      "events": 491,
+      "warnings": [],
+      "show_sha256": "637d43ad8c5e767ba9f0c0a100e2340f2fbaf411cf55d055aba0984ac8d3121c",
+      "events_sha256": "920f0415377750a22c7d572e0ddd2f66455af6d02f5563421fae5b61f796653d"
+    },
+    "repeat": {
+      "state": "completed",
+      "target_exit": 0,
+      "target_signal": null,
+      "collector_exit": 0,
+      "collector_signal": null,
+      "capture": "complete_for_supported_events",
+      "storage": "verified",
+      "events": 491,
+      "warnings": [],
+      "show_sha256": "54ad4a6a29d0577d4dd0ddc19bcd1937e8440588c8e921705ddf72d8af888273",
+      "events_sha256": "1f17f15d2f7ffb2344a277a89d1bfd9bea8aee5b29e73cac4e47729c7ca5ea1d"
+    },
+    "bad": {
+      "state": "completed",
+      "target_exit": 1,
+      "target_signal": null,
+      "collector_exit": 1,
+      "collector_signal": null,
+      "capture": "complete_for_supported_events",
+      "storage": "verified",
+      "events": 490,
+      "warnings": [],
+      "show_sha256": "083bc595c6dfd7598a197892a2a39aa967a0dfcad87d04e496635c2a43f49147",
+      "events_sha256": "6560380b4032770825a2e37e40c4f691273c53c00add0449670a5556b7737b78"
+    },
+    "bad-repeat": {
+      "state": "completed",
+      "target_exit": 1,
+      "target_signal": null,
+      "collector_exit": 1,
+      "collector_signal": null,
+      "capture": "complete_for_supported_events",
+      "storage": "verified",
+      "events": 490,
+      "warnings": [],
+      "show_sha256": "81568e9e3a9e6a10ad52389459fdaa576a99a52d5d3fcfc5317488a5e42ede0d",
+      "events_sha256": "b9e7c5a639f45f6e6fd425575dc8cc5829a556eee6b8258ee44a1a1bf207b1ab"
+    }
+  },
+  "comparisons": {
+    "control": {
+      "observed_differences": false,
+      "changes": 0,
+      "exit_code": 0,
+      "reliability": {
+        "left": {
+          "capture": "complete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "complete",
+          "storage": "verified"
+        }
+      },
+      "categories": {},
+      "warnings": [],
+      "top5": [],
+      "full_json_sha256": "1824d85eb9128c709da7234aba791c4ece79fd25656c8cc2db46f449e0b9e483"
+    },
+    "comparison": {
+      "observed_differences": true,
+      "changes": 3,
+      "exit_code": 1,
+      "reliability": {
+        "left": {
+          "capture": "complete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "complete",
+          "storage": "verified"
+        }
+      },
+      "categories": {
+        "Exit status": 1,
+        "New file access": 1,
+        "Removed file access": 1
+      },
+      "warnings": [],
+      "top5": [
+        {
+          "category": "Exit status",
+          "subject": "",
+          "detail_group": null,
+          "left": [
+            "code=Some(0), signal=None"
+          ],
+          "right": [
+            "code=Some(1), signal=None"
+          ],
+          "left_evidence": [],
+          "right_evidence": []
+        },
+        {
+          "category": "New file access",
+          "subject": "${CASE}/override.conf (openat)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 462,
+              "end_line": 462
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 488,
+              "end_line": 488
+            }
+          ]
+        },
+        {
+          "category": "Removed file access",
+          "subject": "${CASE}/home/.config/pip/pip.conf (openat)",
+          "detail_group": null,
+          "left": [
+            "success"
+          ],
+          "right": [],
+          "left_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 462,
+              "end_line": 462
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 488,
+              "end_line": 488
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 490,
+              "end_line": 490
+            }
+          ],
+          "right_evidence": []
+        }
+      ],
+      "full_json_sha256": "75831fdaabbe6ce849486698b5000ab87b594eb8efa8a3d1160e3d037d512eb7"
+    },
+    "bad-control": {
+      "observed_differences": false,
+      "changes": 0,
+      "exit_code": 0,
+      "reliability": {
+        "left": {
+          "capture": "complete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "complete",
+          "storage": "verified"
+        }
+      },
+      "categories": {},
+      "warnings": [],
+      "top5": [],
+      "full_json_sha256": "59770961283e2eb5a3979f8a134a7ae667d6a26e5e0159b905949a880516e7db"
+    }
+  },
+  "clue_ranks": [
+    {
+      "name": "override_config_opened",
+      "rank": 2,
+      "required": true
+    },
+    {
+      "name": "user_config_no_longer_observed",
+      "rank": 3,
+      "required": true
+    }
+  ],
+  "strict_top5_hit": true,
+  "conclusion_basis": "actual capture; investigator assessment, not a blind user trial",
+  "target_output_excerpts": {
+    "good_stdout": "constraints.txt",
+    "bad_stderr": [
+      "ERROR: No such key - install.constraint"
+    ]
+  }
+}

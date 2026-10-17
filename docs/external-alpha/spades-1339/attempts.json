@@ -1,0 +1,59 @@
+[
+  {
+    "attempt": "diff",
+    "record_exit_codes": [
+      127,
+      127
+    ],
+    "reliability": {
+      "left": {
+        "capture": "complete",
+        "storage": "verified"
+      },
+      "right": {
+        "capture": "complete",
+        "storage": "verified"
+      }
+    },
+    "diff_exit_code": 1,
+    "changes": 3
+  },
+  {
+    "attempt": "diff-v2",
+    "record_exit_codes": [
+      0,
+      0
+    ],
+    "reliability": {
+      "left": {
+        "capture": "incomplete",
+        "storage": "verified"
+      },
+      "right": {
+        "capture": "incomplete",
+        "storage": "verified"
+      }
+    },
+    "diff_exit_code": 3,
+    "changes": 6287
+  },
+  {
+    "attempt": "diff-v3",
+    "record_exit_codes": [
+      0,
+      4
+    ],
+    "reliability": {
+      "left": {
+        "capture": "incomplete",
+        "storage": "verified"
+      },
+      "right": {
+        "capture": "incomplete",
+        "storage": "verified"
+      }
+    },
+    "diff_exit_code": 3,
+    "changes": 3659
+  }
+]

@@ -3,9 +3,9 @@ name = "RunDelta"
 version = "0.2.0-alpha.1"
 edition = "2024"
 license = "MIT"
-description = "Compare observed Linux command executions and file access with strace."
 repository = "https://github.com/Dohyeon2006/rundelta"
-readme = "README.md"
+description = "Compare observed Linux command executions and file access with strace."
+readme = "docs/CRATE_README.md"
 keywords = ["cli", "linux", "strace", "debugging", "rust"]
 categories = ["command-line-utilities", "development-tools::debugging"]
 # Deliberate source distribution; independent of repository/global gitignore.
@@ -14,25 +14,21 @@ include = [
     "/Cargo.toml",
     "/Cargo.lock",
     "/LICENSE",
-    "/README.md",
-    "/assets/rundelta-signal.svg",
-    "/docs/BUILDING.md",
-    "/docs/PROJECT.md",
-    "/docs/ARCHITECTURE.md",
-    "/docs/CHANGELOG.md",
-    "/tools/check_export.py",
-    "/tests/test_export_safety.py",
-    "/tests/fixtures/trace.txt",
-    "/tests/fixtures/finalization_barrier.c",
-    "/tests/public_cli.rs",
-    "/tests/public_cli.py",
+    "/docs/CRATE_README.md",
     "/src/main.rs",
     "/src/cli.rs",
     "/src/capture/mod.rs",
+    "/src/capture/owner.rs",
+    "/src/capture/completion.rs",
+    "/src/capture/reduction.rs",
+    "/src/capture/platform_exit.rs",
+    "/src/capture/supervision.rs",
+    "/src/capture/policy.rs",
     "/src/parse/mod.rs",
     "/src/parse/fs_tests.rs",
     "/src/model/mod.rs",
     "/src/store/mod.rs",
+    "/src/store/deletion.rs",
     "/src/diff/mod.rs",
     "/src/report/mod.rs",
 ]

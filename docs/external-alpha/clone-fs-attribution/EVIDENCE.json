@@ -1,0 +1,1188 @@
+{
+  "normal": {
+    "run_alias": "normal-0",
+    "program_output": "reader_tid=83705 marker=A expected=A access=99 missing=99 missing_errno=0\n",
+    "events": [
+      {
+        "event": {
+          "pid": "83705",
+          "kind": "file",
+          "operation": "openat",
+          "path": "${WORK}/A/payload.txt",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": "${WORK}/A",
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 5,
+            "end_line": 5
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 5,
+            "text": "83705 openat(AT_FDCWD<${WORK}/A>, \"payload.txt\", O_RDONLY) = 3<${WORK}/A/payload.txt>"
+          }
+        ]
+      }
+    ],
+    "show_text_excerpt": "  Last observed CWD (context only, not a current physical path): ${WORK}/A\n  Path context: recorded absolute spelling; verify syscall evidence\n83705 openat ${WORK}/A/payload.txt => success [runs/normal-0/raw/trace.log:5-5]"
+  },
+  "shared-stable": {
+    "run_alias": "shared-stable-0",
+    "program_output": "writer_tid=83735 operation=none result=0 errno=0\nreader_tid=83736 marker=A expected=A access=99 missing=99 missing_errno=0\n",
+    "events": [
+      {
+        "event": {
+          "pid": "83735",
+          "kind": "spawn",
+          "operation": "clone3",
+          "path": "83736",
+          "outcome": "success",
+          "child_pid": "83736",
+          "cwd_before": null,
+          "context_uncertain": true,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 5,
+            "end_line": 5
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 5,
+            "text": "83735 clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=<ADDRESS>, parent_tid=<ADDRESS>, exit_signal=0, stack=<ADDRESS>, stack_size=<ADDRESS>, tls=<ADDRESS>} => {parent_tid=[83736]}, 88) = 83736"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "83736",
+          "kind": "file",
+          "operation": "openat",
+          "path": "${WORK}/A/payload.txt",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": null,
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 6,
+            "end_line": 6
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 6,
+            "text": "83736 openat(AT_FDCWD<${WORK}/A>, \"payload.txt\", O_RDONLY) = 7<${WORK}/A/payload.txt>"
+          }
+        ]
+      }
+    ],
+    "show_text_excerpt": "  Last observed CWD (context only, not a current physical path): unknown\n  Path context: recorded absolute spelling; verify syscall evidence\n83736 openat ${WORK}/A/payload.txt => success [runs/shared-stable-0/raw/trace.log:6-6]"
+  },
+  "shared-chdir": {
+    "run_alias": "shared-chdir-0",
+    "program_output": "writer_tid=83768 operation=chdir result=0 errno=0\nreader_tid=83769 marker=B expected=B access=99 missing=99 missing_errno=0\n",
+    "events": [
+      {
+        "event": {
+          "pid": "83768",
+          "kind": "spawn",
+          "operation": "clone3",
+          "path": "83769",
+          "outcome": "success",
+          "child_pid": "83769",
+          "cwd_before": null,
+          "context_uncertain": true,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 5,
+            "end_line": 5
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 5,
+            "text": "83768 clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=<ADDRESS>, parent_tid=<ADDRESS>, exit_signal=0, stack=<ADDRESS>, stack_size=<ADDRESS>, tls=<ADDRESS>} => {parent_tid=[83769]}, 88) = 83769"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "83768",
+          "kind": "cwd",
+          "operation": "chdir",
+          "path": "${WORK}/B",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": null,
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 6,
+            "end_line": 6
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 6,
+            "text": "83768 chdir(\"${WORK}/B\") = 0"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "83769",
+          "kind": "file",
+          "operation": "openat",
+          "path": "${WORK}/B/payload.txt",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": null,
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 7,
+            "end_line": 7
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 7,
+            "text": "83769 openat(AT_FDCWD<${WORK}/B>, \"payload.txt\", O_RDONLY) = 7<${WORK}/B/payload.txt>"
+          }
+        ]
+      }
+    ],
+    "show_text_excerpt": "  Last observed CWD (context only, not a current physical path): unknown\n  Path context: recorded absolute spelling; verify syscall evidence\n83769 openat ${WORK}/B/payload.txt => success [runs/shared-chdir-0/raw/trace.log:7-7]"
+  },
+  "private-chdir": {
+    "run_alias": "private-chdir-0",
+    "program_output": "writer_tid=83801 operation=chdir result=0 errno=0\nreader_tid=83802 marker=A expected=A access=99 missing=99 missing_errno=0\n",
+    "events": [
+      {
+        "event": {
+          "pid": "83801",
+          "kind": "spawn",
+          "operation": "clone",
+          "path": "83802",
+          "outcome": "success",
+          "child_pid": "83802",
+          "cwd_before": "${WORK}/A",
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 5,
+            "end_line": 5
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 5,
+            "text": "83801 clone(child_stack=NULL, flags=CLONE_CHILD_CLEARTID|CLONE_CHILD_SETTID|SIGCHLD, child_tidptr=<ADDRESS>) = 83802"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "83801",
+          "kind": "cwd",
+          "operation": "chdir",
+          "path": "${WORK}/B",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": "${WORK}/A",
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 6,
+            "end_line": 6
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 6,
+            "text": "83801 chdir(\"${WORK}/B\") = 0"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "83802",
+          "kind": "file",
+          "operation": "openat",
+          "path": "${WORK}/A/payload.txt",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": "${WORK}/A",
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 7,
+            "end_line": 7
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 7,
+            "text": "83802 openat(AT_FDCWD<${WORK}/A>, \"payload.txt\", O_RDONLY) = 7<${WORK}/A/payload.txt>"
+          }
+        ]
+      }
+    ],
+    "show_text_excerpt": "  Last observed CWD (context only, not a current physical path): ${WORK}/A\n  Path context: recorded absolute spelling; verify syscall evidence\n83802 openat ${WORK}/A/payload.txt => success [runs/private-chdir-0/raw/trace.log:7-7]"
+  },
+  "shared-process-chdir": {
+    "run_alias": "shared-process-chdir-0",
+    "program_output": "writer_tid=83834 operation=chdir result=0 errno=0\nreader_tid=83835 marker=B expected=B access=99 missing=99 missing_errno=0\n",
+    "events": [
+      {
+        "event": {
+          "pid": "83834",
+          "kind": "spawn",
+          "operation": "clone",
+          "path": "83835",
+          "outcome": "success",
+          "child_pid": "83835",
+          "cwd_before": null,
+          "context_uncertain": true,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 5,
+            "end_line": 5
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 5,
+            "text": "83834 clone(child_stack=<ADDRESS>, flags=CLONE_FS|SIGCHLD) = 83835"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "83834",
+          "kind": "cwd",
+          "operation": "chdir",
+          "path": "${WORK}/B",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": null,
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 6,
+            "end_line": 6
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 6,
+            "text": "83834 chdir(\"${WORK}/B\") = 0"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "83835",
+          "kind": "file",
+          "operation": "openat",
+          "path": "${WORK}/B/payload.txt",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": null,
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 7,
+            "end_line": 7
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 7,
+            "text": "83835 openat(AT_FDCWD<${WORK}/B>, \"payload.txt\", O_RDONLY) = 7<${WORK}/B/payload.txt>"
+          }
+        ]
+      }
+    ],
+    "show_text_excerpt": "  Last observed CWD (context only, not a current physical path): unknown\n  Path context: recorded absolute spelling; verify syscall evidence\n83835 openat ${WORK}/B/payload.txt => success [runs/shared-process-chdir-0/raw/trace.log:7-7]"
+  },
+  "shared-fchdir": {
+    "run_alias": "shared-fchdir-0",
+    "program_output": "writer_tid=83867 operation=fchdir result=0 errno=0\nreader_tid=83868 marker=B expected=B access=99 missing=99 missing_errno=0\n",
+    "events": [
+      {
+        "event": {
+          "pid": "83867",
+          "kind": "spawn",
+          "operation": "clone3",
+          "path": "83868",
+          "outcome": "success",
+          "child_pid": "83868",
+          "cwd_before": null,
+          "context_uncertain": true,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 6,
+            "end_line": 6
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 6,
+            "text": "83867 clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=<ADDRESS>, parent_tid=<ADDRESS>, exit_signal=0, stack=<ADDRESS>, stack_size=<ADDRESS>, tls=<ADDRESS>} => {parent_tid=[83868]}, 88) = 83868"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "83867",
+          "kind": "cwd",
+          "operation": "fchdir",
+          "path": "${WORK}/B",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": null,
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 7,
+            "end_line": 7
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 7,
+            "text": "83867 fchdir(3<${WORK}/B>) = 0"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "83868",
+          "kind": "file",
+          "operation": "openat",
+          "path": "${WORK}/B/payload.txt",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": null,
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 8,
+            "end_line": 8
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 8,
+            "text": "83868 openat(AT_FDCWD<${WORK}/B>, \"payload.txt\", O_RDONLY) = 3<${WORK}/B/payload.txt>"
+          }
+        ]
+      }
+    ],
+    "show_text_excerpt": "  Last observed CWD (context only, not a current physical path): unknown\n  Path context: recorded absolute spelling; verify syscall evidence\n83868 openat ${WORK}/B/payload.txt => success [runs/shared-fchdir-0/raw/trace.log:8-8]"
+  },
+  "private-fchdir": {
+    "run_alias": "private-fchdir-0",
+    "program_output": "writer_tid=83907 operation=fchdir result=0 errno=0\nreader_tid=83908 marker=A expected=A access=99 missing=99 missing_errno=0\n",
+    "events": [
+      {
+        "event": {
+          "pid": "83907",
+          "kind": "spawn",
+          "operation": "clone",
+          "path": "83908",
+          "outcome": "success",
+          "child_pid": "83908",
+          "cwd_before": "${WORK}/A",
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 6,
+            "end_line": 6
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 6,
+            "text": "83907 clone(child_stack=NULL, flags=CLONE_CHILD_CLEARTID|CLONE_CHILD_SETTID|SIGCHLD, child_tidptr=<ADDRESS>) = 83908"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "83907",
+          "kind": "cwd",
+          "operation": "fchdir",
+          "path": "${WORK}/B",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": "${WORK}/A",
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 7,
+            "end_line": 7
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 7,
+            "text": "83907 fchdir(3<${WORK}/B>) = 0"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "83908",
+          "kind": "file",
+          "operation": "openat",
+          "path": "${WORK}/A/payload.txt",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": "${WORK}/A",
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 8,
+            "end_line": 8
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 8,
+            "text": "83908 openat(AT_FDCWD<${WORK}/A>, \"payload.txt\", O_RDONLY) = 8<${WORK}/A/payload.txt>"
+          }
+        ]
+      }
+    ],
+    "show_text_excerpt": "  Last observed CWD (context only, not a current physical path): ${WORK}/A\n  Path context: recorded absolute spelling; verify syscall evidence\n83908 openat ${WORK}/A/payload.txt => success [runs/private-fchdir-0/raw/trace.log:8-8]"
+  },
+  "shared-fail-chdir": {
+    "run_alias": "shared-fail-chdir-0",
+    "program_output": "writer_tid=83940 operation=fail-chdir result=-1 errno=2\nreader_tid=83941 marker=A expected=A access=99 missing=99 missing_errno=0\n",
+    "events": [
+      {
+        "event": {
+          "pid": "83940",
+          "kind": "spawn",
+          "operation": "clone3",
+          "path": "83941",
+          "outcome": "success",
+          "child_pid": "83941",
+          "cwd_before": null,
+          "context_uncertain": true,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 5,
+            "end_line": 5
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 5,
+            "text": "83940 clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=<ADDRESS>, parent_tid=<ADDRESS>, exit_signal=0, stack=<ADDRESS>, stack_size=<ADDRESS>, tls=<ADDRESS>} => {parent_tid=[83941]}, 88) = 83941"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "83940",
+          "kind": "cwd",
+          "operation": "chdir",
+          "path": "${WORK}/missing-directory",
+          "outcome": "ENOENT",
+          "child_pid": null,
+          "cwd_before": null,
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 6,
+            "end_line": 6
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 6,
+            "text": "83940 chdir(\"${WORK}/missing-directory\") = -1 ENOENT (No such file or directory)"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "83941",
+          "kind": "file",
+          "operation": "openat",
+          "path": "${WORK}/A/payload.txt",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": null,
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 7,
+            "end_line": 7
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 7,
+            "text": "83941 openat(AT_FDCWD<${WORK}/A>, \"payload.txt\", O_RDONLY) = 7<${WORK}/A/payload.txt>"
+          }
+        ]
+      }
+    ],
+    "show_text_excerpt": "  Last observed CWD (context only, not a current physical path): unknown\n  Path context: recorded absolute spelling; verify syscall evidence\n83941 openat ${WORK}/A/payload.txt => success [runs/shared-fail-chdir-0/raw/trace.log:7-7]"
+  },
+  "private-fail-chdir": {
+    "run_alias": "private-fail-chdir-0",
+    "program_output": "writer_tid=83973 operation=fail-chdir result=-1 errno=2\nreader_tid=83974 marker=A expected=A access=99 missing=99 missing_errno=0\n",
+    "events": [
+      {
+        "event": {
+          "pid": "83973",
+          "kind": "spawn",
+          "operation": "clone",
+          "path": "83974",
+          "outcome": "success",
+          "child_pid": "83974",
+          "cwd_before": "${WORK}/A",
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 5,
+            "end_line": 5
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 5,
+            "text": "83973 clone(child_stack=NULL, flags=CLONE_CHILD_CLEARTID|CLONE_CHILD_SETTID|SIGCHLD, child_tidptr=<ADDRESS>) = 83974"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "83973",
+          "kind": "cwd",
+          "operation": "chdir",
+          "path": "${WORK}/missing-directory",
+          "outcome": "ENOENT",
+          "child_pid": null,
+          "cwd_before": "${WORK}/A",
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 6,
+            "end_line": 6
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 6,
+            "text": "83973 chdir(\"${WORK}/missing-directory\") = -1 ENOENT (No such file or directory)"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "83974",
+          "kind": "file",
+          "operation": "openat",
+          "path": "${WORK}/A/payload.txt",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": "${WORK}/A",
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 7,
+            "end_line": 7
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 7,
+            "text": "83974 openat(AT_FDCWD<${WORK}/A>, \"payload.txt\", O_RDONLY) = 7<${WORK}/A/payload.txt>"
+          }
+        ]
+      }
+    ],
+    "show_text_excerpt": "  Last observed CWD (context only, not a current physical path): ${WORK}/A\n  Path context: recorded absolute spelling; verify syscall evidence\n83974 openat ${WORK}/A/payload.txt => success [runs/private-fail-chdir-0/raw/trace.log:7-7]"
+  },
+  "shared-fail-fchdir": {
+    "run_alias": "shared-fail-fchdir-0",
+    "program_output": "writer_tid=84006 operation=fail-fchdir result=-1 errno=9\nreader_tid=84007 marker=A expected=A access=99 missing=99 missing_errno=0\n",
+    "events": [
+      {
+        "event": {
+          "pid": "84006",
+          "kind": "spawn",
+          "operation": "clone3",
+          "path": "84007",
+          "outcome": "success",
+          "child_pid": "84007",
+          "cwd_before": null,
+          "context_uncertain": true,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 5,
+            "end_line": 5
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 5,
+            "text": "84006 clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=<ADDRESS>, parent_tid=<ADDRESS>, exit_signal=0, stack=<ADDRESS>, stack_size=<ADDRESS>, tls=<ADDRESS>} => {parent_tid=[84007]}, 88) = 84007"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "84006",
+          "kind": "cwd",
+          "operation": "fchdir",
+          "path": null,
+          "outcome": "EBADF",
+          "child_pid": null,
+          "cwd_before": null,
+          "context_uncertain": true,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 6,
+            "end_line": 6
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 6,
+            "text": "84006 fchdir(-1)                        = -1 EBADF (Bad file descriptor)"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "84007",
+          "kind": "file",
+          "operation": "openat",
+          "path": "${WORK}/A/payload.txt",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": null,
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 7,
+            "end_line": 7
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 7,
+            "text": "84007 openat(AT_FDCWD<${WORK}/A>, \"payload.txt\", O_RDONLY) = 7<${WORK}/A/payload.txt>"
+          }
+        ]
+      }
+    ],
+    "show_text_excerpt": "  Last observed CWD (context only, not a current physical path): unknown\n  Path context: recorded absolute spelling; verify syscall evidence\n84007 openat ${WORK}/A/payload.txt => success [runs/shared-fail-fchdir-0/raw/trace.log:7-7]"
+  },
+  "private-fail-fchdir": {
+    "run_alias": "private-fail-fchdir-0",
+    "program_output": "writer_tid=84039 operation=fail-fchdir result=-1 errno=9\nreader_tid=84040 marker=A expected=A access=99 missing=99 missing_errno=0\n",
+    "events": [
+      {
+        "event": {
+          "pid": "84039",
+          "kind": "spawn",
+          "operation": "clone",
+          "path": "84040",
+          "outcome": "success",
+          "child_pid": "84040",
+          "cwd_before": "${WORK}/A",
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 5,
+            "end_line": 5
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 5,
+            "text": "84039 clone(child_stack=NULL, flags=CLONE_CHILD_CLEARTID|CLONE_CHILD_SETTID|SIGCHLD, child_tidptr=<ADDRESS>) = 84040"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "84039",
+          "kind": "cwd",
+          "operation": "fchdir",
+          "path": null,
+          "outcome": "EBADF",
+          "child_pid": null,
+          "cwd_before": "${WORK}/A",
+          "context_uncertain": true,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 6,
+            "end_line": 6
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 6,
+            "text": "84039 fchdir(-1)                        = -1 EBADF (Bad file descriptor)"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "84040",
+          "kind": "file",
+          "operation": "openat",
+          "path": "${WORK}/A/payload.txt",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": "${WORK}/A",
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 7,
+            "end_line": 7
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 7,
+            "text": "84040 openat(AT_FDCWD<${WORK}/A>, \"payload.txt\", O_RDONLY) = 7<${WORK}/A/payload.txt>"
+          }
+        ]
+      }
+    ],
+    "show_text_excerpt": "  Last observed CWD (context only, not a current physical path): ${WORK}/A\n  Path context: recorded absolute spelling; verify syscall evidence\n84040 openat ${WORK}/A/payload.txt => success [runs/private-fail-fchdir-0/raw/trace.log:7-7]"
+  },
+  "mixed-groups": {
+    "run_alias": "mixed-groups-0",
+    "program_output": "writer_tid=84072 operation=chdir result=0 errno=0\nreader_tid=84073 marker=A expected=A access=99 missing=99 missing_errno=0\n",
+    "events": [
+      {
+        "event": {
+          "pid": "84072",
+          "kind": "spawn",
+          "operation": "clone",
+          "path": "84073",
+          "outcome": "success",
+          "child_pid": "84073",
+          "cwd_before": null,
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 5,
+            "end_line": 5
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 5,
+            "text": "84072 clone(child_stack=NULL, flags=CLONE_CHILD_CLEARTID|CLONE_CHILD_SETTID|SIGCHLD, child_tidptr=<ADDRESS>) = 84073"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "84072",
+          "kind": "spawn",
+          "operation": "clone3",
+          "path": "84074",
+          "outcome": "success",
+          "child_pid": "84074",
+          "cwd_before": null,
+          "context_uncertain": true,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 6,
+            "end_line": 6
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 6,
+            "text": "84072 clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=<ADDRESS>, parent_tid=<ADDRESS>, exit_signal=0, stack=<ADDRESS>, stack_size=<ADDRESS>, tls=<ADDRESS>} => {parent_tid=[84074]}, 88) = 84074"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "84072",
+          "kind": "cwd",
+          "operation": "chdir",
+          "path": "${WORK}/B",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": null,
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 8,
+            "end_line": 8
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 8,
+            "text": "84072 chdir(\"${WORK}/B\") = 0"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "84073",
+          "kind": "file",
+          "operation": "openat",
+          "path": "${WORK}/A/payload.txt",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": null,
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 9,
+            "end_line": 9
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 9,
+            "text": "84073 openat(AT_FDCWD<${WORK}/A>, \"payload.txt\", O_RDONLY) = 7<${WORK}/A/payload.txt>"
+          }
+        ]
+      }
+    ],
+    "show_text_excerpt": "  Last observed CWD (context only, not a current physical path): unknown\n  Path context: recorded absolute spelling; verify syscall evidence\n84073 openat ${WORK}/A/payload.txt => success [runs/mixed-groups-0/raw/trace.log:9-9]"
+  },
+  "normal-access": {
+    "run_alias": "normal-access-0",
+    "program_output": "reader_tid=84108 marker=A expected=A access=0 missing=-1 missing_errno=2\n",
+    "events": [
+      {
+        "event": {
+          "pid": "84108",
+          "kind": "file",
+          "operation": "openat",
+          "path": "${WORK}/A/payload.txt",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": "${WORK}/A",
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 5,
+            "end_line": 5
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 5,
+            "text": "84108 openat(AT_FDCWD<${WORK}/A>, \"payload.txt\", O_RDONLY) = 3<${WORK}/A/payload.txt>"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "84108",
+          "kind": "file",
+          "operation": "access",
+          "path": "relative:payload.txt [cwd unresolved]",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": "${WORK}/A",
+          "context_uncertain": true,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 6,
+            "end_line": 6
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 6,
+            "text": "84108 access(\"payload.txt\", R_OK) = 0"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "84108",
+          "kind": "file",
+          "operation": "access",
+          "path": "relative:not-present.txt [cwd unresolved]",
+          "outcome": "ENOENT",
+          "child_pid": null,
+          "cwd_before": "${WORK}/A",
+          "context_uncertain": true,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 7,
+            "end_line": 7
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 7,
+            "text": "84108 access(\"not-present.txt\", F_OK) = -1 ENOENT (No such file or directory)"
+          }
+        ]
+      }
+    ],
+    "show_text_excerpt": "  Last observed CWD (context only, not a current physical path): ${WORK}/A\n  Path context: recorded absolute spelling; verify syscall evidence\n84108 openat ${WORK}/A/payload.txt => success [runs/normal-access-0/raw/trace.log:5-5]"
+  },
+  "shared-access": {
+    "run_alias": "shared-access-0",
+    "program_output": "writer_tid=84138 operation=chdir result=0 errno=0\nreader_tid=84139 marker=B expected=B access=0 missing=-1 missing_errno=2\n",
+    "events": [
+      {
+        "event": {
+          "pid": "84138",
+          "kind": "spawn",
+          "operation": "clone3",
+          "path": "84139",
+          "outcome": "success",
+          "child_pid": "84139",
+          "cwd_before": null,
+          "context_uncertain": true,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 5,
+            "end_line": 5
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 5,
+            "text": "84138 clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=<ADDRESS>, parent_tid=<ADDRESS>, exit_signal=0, stack=<ADDRESS>, stack_size=<ADDRESS>, tls=<ADDRESS>} => {parent_tid=[84139]}, 88) = 84139"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "84138",
+          "kind": "cwd",
+          "operation": "chdir",
+          "path": "${WORK}/B",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": null,
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 6,
+            "end_line": 6
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 6,
+            "text": "84138 chdir(\"${WORK}/B\") = 0"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "84139",
+          "kind": "file",
+          "operation": "openat",
+          "path": "${WORK}/B/payload.txt",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": null,
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 7,
+            "end_line": 7
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 7,
+            "text": "84139 openat(AT_FDCWD<${WORK}/B>, \"payload.txt\", O_RDONLY) = 7<${WORK}/B/payload.txt>"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "84139",
+          "kind": "file",
+          "operation": "access",
+          "path": "relative:payload.txt [cwd unresolved]",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": null,
+          "context_uncertain": true,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 8,
+            "end_line": 8
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 8,
+            "text": "84139 access(\"payload.txt\", R_OK) = 0"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "84139",
+          "kind": "file",
+          "operation": "access",
+          "path": "relative:not-present.txt [cwd unresolved]",
+          "outcome": "ENOENT",
+          "child_pid": null,
+          "cwd_before": null,
+          "context_uncertain": true,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 9,
+            "end_line": 9
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 9,
+            "text": "84139 access(\"not-present.txt\", F_OK) = -1 ENOENT (No such file or directory)"
+          }
+        ]
+      }
+    ],
+    "show_text_excerpt": "  Last observed CWD (context only, not a current physical path): unknown\n  Path context: recorded absolute spelling; verify syscall evidence\n84139 openat ${WORK}/B/payload.txt => success [runs/shared-access-0/raw/trace.log:7-7]"
+  },
+  "private-access": {
+    "run_alias": "private-access-0",
+    "program_output": "writer_tid=84171 operation=chdir result=0 errno=0\nreader_tid=84172 marker=A expected=A access=0 missing=-1 missing_errno=2\n",
+    "events": [
+      {
+        "event": {
+          "pid": "84171",
+          "kind": "spawn",
+          "operation": "clone",
+          "path": "84172",
+          "outcome": "success",
+          "child_pid": "84172",
+          "cwd_before": "${WORK}/A",
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 5,
+            "end_line": 5
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 5,
+            "text": "84171 clone(child_stack=NULL, flags=CLONE_CHILD_CLEARTID|CLONE_CHILD_SETTID|SIGCHLD, child_tidptr=<ADDRESS>) = 84172"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "84171",
+          "kind": "cwd",
+          "operation": "chdir",
+          "path": "${WORK}/B",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": "${WORK}/A",
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 6,
+            "end_line": 6
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 6,
+            "text": "84171 chdir(\"${WORK}/B\") = 0"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "84172",
+          "kind": "file",
+          "operation": "openat",
+          "path": "${WORK}/A/payload.txt",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": "${WORK}/A",
+          "context_uncertain": false,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 7,
+            "end_line": 7
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 7,
+            "text": "84172 openat(AT_FDCWD<${WORK}/A>, \"payload.txt\", O_RDONLY) = 7<${WORK}/A/payload.txt>"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "84172",
+          "kind": "file",
+          "operation": "access",
+          "path": "relative:payload.txt [cwd unresolved]",
+          "outcome": "success",
+          "child_pid": null,
+          "cwd_before": "${WORK}/A",
+          "context_uncertain": true,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 8,
+            "end_line": 8
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 8,
+            "text": "84172 access(\"payload.txt\", R_OK) = 0"
+          }
+        ]
+      },
+      {
+        "event": {
+          "pid": "84172",
+          "kind": "file",
+          "operation": "access",
+          "path": "relative:not-present.txt [cwd unresolved]",
+          "outcome": "ENOENT",
+          "child_pid": null,
+          "cwd_before": "${WORK}/A",
+          "context_uncertain": true,
+          "evidence": {
+            "file": "raw/trace.log",
+            "line": 9,
+            "end_line": 9
+          }
+        },
+        "decoded_redacted_raw_lines": [
+          {
+            "line": 9,
+            "text": "84172 access(\"not-present.txt\", F_OK) = -1 ENOENT (No such file or directory)"
+          }
+        ]
+      }
+    ],
+    "show_text_excerpt": "  Last observed CWD (context only, not a current physical path): ${WORK}/A\n  Path context: recorded absolute spelling; verify syscall evidence\n84172 openat ${WORK}/A/payload.txt => success [runs/private-access-0/raw/trace.log:7-7]"
+  }
+}

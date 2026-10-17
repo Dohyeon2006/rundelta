@@ -8,10 +8,14 @@ import hashlib
 import html
 import io
 import json
+import os
 from pathlib import Path, PurePosixPath
 import re
+import selectors
+import signal
 import subprocess
 import tarfile
+import time
 import tomllib
 import tokenize
 import urllib.parse
@@ -830,9 +834,94 @@ def inspect_files(files, expected, private_prefixes=(), *, legacy=False, payload
     return findings
 
 
-def git(root, *args):
-    return subprocess.check_output(["git", "--no-optional-locks", "--no-replace-objects",
-                                    "-C", str(root), *args], stderr=subprocess.PIPE)
+GIT_QUERY_TIMEOUT_SECONDS = 60.0
+GIT_REAP_TIMEOUT_SECONDS = 2.0
+GIT_MAX_QUERY_BYTES = 64 * 1024 * 1024
+
+
+def stop_git_query(process):
+    """Kill only this query's new process group and bound child reaping."""
+    if process.pid <= 1 or process.pid in (os.getpid(), os.getpgrp()):
+        raise ValueError("git_termination_failed")
+    termination_failed = False
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    except OSError:
+        termination_failed = True
+    try:
+        process.wait(timeout=GIT_REAP_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        raise ValueError("git_reap_timeout") from None
+    if termination_failed:
+        raise ValueError("git_termination_failed")
+
+
+def git(root, *args, max_bytes=None):
+    """Read existing objects with a shared output/deadline bound per query.
+
+    stdout is drained incrementally and nonblocking; stderr has no pipe to fill.
+    No Popen context manager or unbounded wait may override bounded cleanup.
+    """
+    command = ["git", "--no-optional-locks", "--no-replace-objects", "-C", str(root), *args]
+    environment = dict(os.environ, GIT_NO_LAZY_FETCH="1", GIT_TERMINAL_PROMPT="0")
+    limit = GIT_MAX_QUERY_BYTES if max_bytes is None else min(max_bytes, GIT_MAX_QUERY_BYTES)
+    if limit < 0:
+        raise ValueError("git_output_budget_exceeded")
+    overflow = ("history_work_budget_exceeded" if max_bytes is not None and max_bytes <= GIT_MAX_QUERY_BYTES
+                else "git_output_budget_exceeded")
+    deadline = time.monotonic() + GIT_QUERY_TIMEOUT_SECONDS
+    process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                               stderr=subprocess.DEVNULL, env=environment, start_new_session=True)
+    output = bytearray()
+    succeeded = False
+    try:
+        descriptor = process.stdout.fileno()
+        os.set_blocking(descriptor, False)
+        with selectors.DefaultSelector() as ready:
+            ready.register(descriptor, selectors.EVENT_READ)
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise ValueError("git_query_timeout")
+                try:
+                    events = ready.select(remaining)
+                except InterruptedError:
+                    continue
+                if not events:
+                    continue
+                try:
+                    chunk = os.read(descriptor, min(65_536, limit + 1 - len(output)))
+                except (BlockingIOError, InterruptedError):
+                    continue
+                if not chunk:
+                    break
+                output.extend(chunk)
+                if len(output) > limit:
+                    raise ValueError(overflow)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise ValueError("git_query_timeout")
+        try:
+            status = process.wait(timeout=remaining)
+        except subprocess.TimeoutExpired:
+            raise ValueError("git_query_timeout") from None
+        if status:
+            raise subprocess.CalledProcessError(status, command)
+        result = bytes(output)
+        process.stdout.close()
+        succeeded = True
+        return result
+    finally:
+        if not succeeded:
+            try:
+                process.stdout.close()
+            finally:
+                # A reaped leader does not imply that its dedicated group is
+                # empty: descendants may still retain stdout. Every failure
+                # closes that group, even when returncode is already known.
+                stop_git_query(process)
 
 
 def worktree_files(root):
@@ -859,9 +948,10 @@ def worktree_files(root):
     return files
 
 
-def tree_files(root, revision, *, historical=False):
+def tree_files(root, revision, *, historical=False, read_git=None):
     files = {}
-    for row in git(root, "ls-tree", "-rz", "--full-tree", revision).split(b"\0"):
+    query = read_git if read_git is not None else lambda *args: git(root, *args)
+    for row in query("ls-tree", "-rz", "--full-tree", revision).split(b"\0"):
         if not row:
             continue
         meta, name = row.split(b"\t", 1)
@@ -869,51 +959,118 @@ def tree_files(root, revision, *, historical=False):
         expected_mode = b"100755" if not historical and name.decode() in EXECUTABLE_FILES else b"100644"
         if mode != expected_mode or kind != b"blob":
             raise ValueError("unsafe_git_entry")
-        files[name.decode()] = git(root, "cat-file", "blob", oid.decode())
+        files[name.decode()] = query("cat-file", "blob", oid.decode())
     return files
 
 
-def history_findings(root, private_prefixes=(), *, baseline=BASELINE):
-    """Check every ancestor, including deleted blobs and commit metadata.
+# These budgets count unique commits, all parent edges and every Git response
+# processed (including repeated trees/blobs). Exceeding one rejects the scan;
+# no truncated walk is reported as complete.
+HISTORY_MAX_COMMITS = 4_096
+HISTORY_MAX_PARENT_EDGES = 16_384
+HISTORY_MAX_WORK_BYTES = 256 * 1024 * 1024
+HISTORY_MAX_QUERIES = 65_536
 
-    Only the already-reviewed public root receives historical format rules.
-    The optional baseline parameter is a test seam, not a CLI override.
+
+def history_findings(root, private_prefixes=(), *, baseline=BASELINE):
+    """Scan the complete pinned-HEAD DAG, parent before child, once per OID.
+
+    Historical schema grants belong only to exact reviewed commit/tree pairs.
+    The baseline argument remains a synthetic-test seam, never a CLI override.
+    Shared trees do not suppress either content or raw commit-metadata scans.
     """
-    grafts = Path(git(root, "rev-parse", "--git-path", "info/grafts").decode().strip())
+    processed_bytes = queries = 0
+    def read(*args):
+        nonlocal processed_bytes, queries
+        if queries >= HISTORY_MAX_QUERIES:
+            raise ValueError("history_query_budget_exceeded")
+        queries += 1
+        remaining = HISTORY_MAX_WORK_BYTES - processed_bytes
+        if remaining < 0:
+            raise ValueError("history_work_budget_exceeded")
+        result = git(root, *args, max_bytes=remaining)
+        processed_bytes += len(result)
+        return result
+    def oid(value):
+        if not re.fullmatch(r"[0-9a-f]{40}", value):
+            raise ValueError("invalid_history_graph")
+        return value
+    grafts = Path(read("rev-parse", "--git-path", "info/grafts").decode().strip())
     if not grafts.is_absolute():
         grafts = root / grafts
-    if (grafts.exists() or git(root, "rev-parse", "--is-shallow-repository").strip() != b"false"
-            or git(root, "for-each-ref", "refs/replace").strip()):
+    if (grafts.exists() or read("rev-parse", "--is-shallow-repository").strip() != b"false"
+            or read("for-each-ref", "refs/replace").strip()):
         raise ValueError("incomplete_or_rewritten_history_view")
-    commits = git(root, "rev-list", "--reverse", "HEAD").decode().splitlines()
-    if not commits or commits[0] != baseline:
+    head = oid(read("rev-parse", "--verify", "HEAD").decode().strip())
+    if read("cat-file", "-t", head).strip() != b"commit":
+        raise ValueError("invalid_history_object")
+    walk = read("rev-list", "--topo-order", "--reverse", "--parents",
+                "--max-count=" + str(HISTORY_MAX_COMMITS + 1), head).decode().splitlines()
+    if len(walk) > HISTORY_MAX_COMMITS:
+        raise ValueError("history_commit_budget_exceeded")
+    records = []
+    parent_edges = 0
+    for line in walk:
+        fields = line.split()
+        if not fields:
+            raise ValueError("invalid_history_graph")
+        commit, parents = oid(fields[0]), [oid(value) for value in fields[1:]]
+        parent_edges += len(parents)
+        if parent_edges > HISTORY_MAX_PARENT_EDGES:
+            raise ValueError("history_parent_budget_exceeded")
+        records.append((commit, parents))
+    parents_by_oid = dict(records)
+    if len(parents_by_oid) != len(records) or head not in parents_by_oid:
+        raise ValueError("invalid_history_graph")
+    roots = [commit for commit, parents in records if not parents]
+    if roots != [baseline]:
         raise ValueError("unexpected_history_root")
-    rows = []
-    previous = None
-    for commit in commits:
-        parents = git(root, "rev-list", "--parents", "-n", "1", commit).decode().split()[1:]
-        if parents != ([] if previous is None else [previous]):
-            raise ValueError("nonlinear_history")
+    if any(parent not in parents_by_oid for _, parents in records for parent in parents):
+        raise ValueError("invalid_history_graph")
+    reachable, pending = set(), [head]
+    while pending:
+        commit = pending.pop()
+        if commit not in reachable:
+            reachable.add(commit)
+            pending.extend(parents_by_oid[commit])
+    if reachable != set(parents_by_oid):
+        raise ValueError("invalid_history_graph")
+    rows, verified = [], set()
+    for commit, parents in records:
+        if any(parent not in verified for parent in parents):
+            raise ValueError("invalid_history_graph")
+        if read("cat-file", "-t", commit).strip() != b"commit":
+            raise ValueError("invalid_history_object")
+        raw_commit = read("cat-file", "commit", commit)
+        header, separator, _ = raw_commit.partition(b"\n\n")
+        lines = header.splitlines()
+        if not separator or not lines or not re.fullmatch(rb"tree [0-9a-f]{40}", lines[0]):
+            raise ValueError("invalid_history_object")
+        raw_parents = [line[7:].decode() for line in lines[1:] if line.startswith(b"parent ")]
+        if raw_parents != parents or any(line.startswith(b"tree ") for line in lines[1:]):
+            raise ValueError("invalid_history_graph")
+        tree = oid(lines[0][5:].decode())
+        if read("cat-file", "-t", tree).strip() != b"tree":
+            raise ValueError("invalid_history_object")
         schema = HISTORIC_SCHEMAS.get(commit)
         if schema is not None:
             expected_tree, inventory, payload, legacy = schema
-            if git(root, "rev-parse", commit + "^{tree}").decode().strip() != expected_tree:
+            if tree != expected_tree:
                 raise ValueError("historic_tree_mismatch")
         elif commit == baseline and baseline != BASELINE:
-            # Synthetic baseline seam; the production CLI cannot select it.
             inventory, payload, legacy = LEGACY_WORKTREE, LEGACY_PAYLOAD, True
         else:
             inventory, payload, legacy = REPO_FILES, CRATE_FILES, False
         historical = schema is not None or legacy
-        files = tree_files(root, commit, historical=historical)
+        files = tree_files(root, tree, historical=historical, read_git=read)
         findings = inspect_files(files, inventory, private_prefixes, legacy=legacy,
                                  payload=payload, readme="README.md" if historical else "docs/CRATE_README.md",
                                  public=not historical)
-        metadata = privacy("commit-metadata", git(root, "cat-file", "commit", commit), private_prefixes)
+        metadata = privacy("commit-metadata", raw_commit, private_prefixes)
         if metadata:
             findings["commit-metadata"] = metadata
         rows.append(findings)
-        previous = commit
+        verified.add(commit)
     return rows
 
 
@@ -1112,7 +1269,9 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except (ValueError, KeyError, TypeError, OSError, subprocess.CalledProcessError, tarfile.TarError, zlib.error) as error:
         known = {"symlink", "nonregular_worktree_entry", "worktree_mode_mismatch", "unsafe_git_entry",
-                 "incomplete_or_rewritten_history_view", "unexpected_history_root", "nonlinear_history",
+                 "incomplete_or_rewritten_history_view", "unexpected_history_root", "invalid_history_graph", "invalid_history_object",
+                 "history_commit_budget_exceeded", "history_parent_budget_exceeded", "history_work_budget_exceeded", "history_query_budget_exceeded",
+                 "git_query_timeout", "git_reap_timeout", "git_termination_failed", "git_output_budget_exceeded",
                  "historic_tree_mismatch", "oversized_archive", "unexpected_gzip_metadata",
                  "unexpected_gzip_filename", "unexpected_archive_trailer", "unsafe_archive_entry",
                  "unexpected_tar_metadata", "private_archive_metadata", "unexpected_tar_padding",

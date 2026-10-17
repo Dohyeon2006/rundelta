@@ -4,17 +4,21 @@ import argparse
 import base64
 from contextlib import contextmanager
 import gzip
+import hashlib
 import importlib.util
 import io
 import json
 import os
+import select
 from pathlib import Path
 import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
 from unittest import mock
 import urllib.parse
+import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("check_export", ROOT / "tools/check_export.py")
@@ -46,6 +50,7 @@ class SyntheticGit:
                         GIT_COMMITTER_NAME="Public Test",
                         GIT_COMMITTER_EMAIL="test@example.invalid")
         self.git("init", "--quiet")
+        self.git("config", "gc.auto", "0")
 
     def git(self, *args):
         return subprocess.check_output(["git", "-C", str(self.root), *args],
@@ -67,6 +72,34 @@ class SyntheticGit:
         self.stage(files)
         self.git("commit", "--quiet", "--allow-empty", "-m", message)
         return self.git("rev-parse", "HEAD")
+
+    def commit_tree(self, tree, parents=(), message="Synthetic DAG node", *, date=None):
+        arguments = ["commit-tree", tree]
+        for parent in parents:
+            arguments.extend(("-p", parent))
+        arguments.extend(("-m", message))
+        dates = {} if date is None else {"GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date}
+        with mock.patch.dict(self.env, dates):
+            return self.git(*arguments)
+
+    def object_path(self, oid):
+        return self.root / ".git" / "objects" / oid[:2] / oid[2:]
+
+    def raw_object(self, kind, contents):
+        """Write malformed graph fixtures without asking Git to repair them."""
+        encoded = kind.encode() + b" " + str(len(contents)).encode() + b"\0" + contents
+        oid = hashlib.sha1(encoded).hexdigest()
+        target = self.object_path(oid)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(zlib.compress(encoded))
+        return oid
+
+    def raw_commit(self, tree, parents):
+        header = ["tree " + tree, *("parent " + parent for parent in parents),
+                  "author Public Test <test@example.invalid> 946684800 +0000",
+                  "committer Public Test <test@example.invalid> 946684800 +0000"]
+        return self.raw_object("commit", ("\n".join(header) + "\n\nSynthetic malformed graph\n").encode())
+
 
 
 @contextmanager
@@ -658,6 +691,170 @@ class ExportSafety(unittest.TestCase):
             (repo.root / "target").mkdir()
             self.assertTrue(CHECK.inspect_files(CHECK.worktree_files(repo.root), CHECK.REPO_FILES))
 
+    def synthetic_git_query(self, script, *, max_bytes=32):
+        """Exercise the query reader with an owned child, never a real Git call."""
+        actual = subprocess.Popen
+        children = []
+        def launch(command, **kwargs):
+            self.assertEqual(kwargs["stderr"], subprocess.DEVNULL)
+            self.assertTrue(kwargs["start_new_session"])
+            child = actual([sys.executable, "-B", "-c", script], **kwargs)
+            children.append(child)
+            return child
+        try:
+            with mock.patch.object(CHECK, "GIT_QUERY_TIMEOUT_SECONDS", 0.5), \
+                 mock.patch.object(CHECK, "GIT_REAP_TIMEOUT_SECONDS", 2.0), \
+                 mock.patch.object(CHECK, "GIT_MAX_QUERY_BYTES", 32), \
+                 mock.patch.object(CHECK.subprocess, "Popen", side_effect=launch):
+                return CHECK.git(ROOT, "synthetic-query-fixture", max_bytes=max_bytes)
+        finally:
+            # Keep emergency cleanup separate from the assertion: it must not
+            # make a production failure to reap look like a passing test.
+            reaped = bool(children) and all(child.returncode is not None for child in children)
+            for child in children:
+                if child.returncode is None:
+                    child.kill()
+                    child.wait(timeout=2)
+            self.assertTrue(reaped, "query returned/raised without reaping its owned child")
+
+    def test_git_query_deadline_reaps_no_output_and_small_output_stalls(self):
+        for label, script, limit in (
+            ("no-output-bounded", "import time; time.sleep(30)", 32),
+            ("no-output-default", "import time; time.sleep(30)", None),
+            ("small-output", "import os,time; os.write(1,b'x'); time.sleep(30)", 32),
+            ("stdout-eof-before-exit", "import os,time; os.close(1); time.sleep(30)", None),
+        ):
+            with self.subTest(stall=label):
+                with self.assertRaisesRegex(ValueError, "git_query_timeout"):
+                    self.synthetic_git_query(script, max_bytes=limit)
+
+    def test_git_query_keeps_incremental_output_limit_and_reaps_overflow(self):
+        for limit, rule in ((32, "history_work_budget_exceeded"), (None, "git_output_budget_exceeded")):
+            with self.subTest(limit=limit):
+                with self.assertRaisesRegex(ValueError, rule):
+                    self.synthetic_git_query("import os,time; os.write(1,b'x'*4096); time.sleep(30)",
+                                             max_bytes=limit)
+
+    def test_git_query_success_failure_and_stderr_flood_are_bounded(self):
+        script = "import os; os.write(2,b'e'*262144); os.write(1,b'ok')"
+        for limit in (2, None):
+            with self.subTest(limit=limit):
+                self.assertEqual(self.synthetic_git_query(script, max_bytes=limit), b"ok")
+        failed = "import os; os.write(2,b'e'*262144); os.write(1,b'partial'); raise SystemExit(7)"
+        with self.assertRaises(subprocess.CalledProcessError) as failure:
+            self.synthetic_git_query(failed)
+        self.assertEqual(failure.exception.returncode, 7)
+
+    def test_git_failure_cleans_descendants_after_the_leader_is_reaped(self):
+        actual = subprocess.Popen
+        descriptors = set()
+        leader = unrelated = None
+        descendant_fd = None
+        def pipe():
+            pair = os.pipe()
+            descriptors.update(pair)
+            return pair
+        def close(descriptor):
+            if descriptor in descriptors:
+                descriptors.remove(descriptor)
+                os.close(descriptor)
+        ready_read, ready_write = pipe()
+        release_read, release_write = pipe()
+        script = (
+            "import os,sys,time\n"
+            "ready,release=map(int,sys.argv[1:])\n"
+            "child=os.fork()\n"
+            "if child == 0:\n"
+            " os.close(ready); os.close(release); time.sleep(30); os._exit(0)\n"
+            "os.write(ready,(str(child)+'\\n').encode()); os.close(ready)\n"
+            "os.read(release,1); os.close(release); os._exit(0)\n"
+        )
+        def launch(command, **kwargs):
+            nonlocal leader, descendant_fd
+            self.assertTrue(kwargs["start_new_session"])
+            kwargs["pass_fds"] = (ready_write, release_read)
+            leader = actual([sys.executable, "-B", "-c", script, str(ready_write), str(release_read)], **kwargs)
+            close(ready_write)
+            close(release_read)
+            self.assertTrue(select.select([ready_read], [], [], 2)[0], "descendant did not become ready")
+            marker = os.read(ready_read, 64)
+            self.assertTrue(marker.endswith(b"\n") and marker[:-1].isdigit(), "invalid descendant marker")
+            descendant_fd = os.pidfd_open(int(marker))
+            descriptors.add(descendant_fd)
+            self.assertFalse(select.select([descendant_fd], [], [], 0)[0])
+            os.write(release_write, b"x")
+            close(release_write)
+            leader.wait(timeout=2)
+            self.assertEqual(leader.returncode, 0)
+            # Return an already reaped leader while its child retains stdout;
+            # returncode-only cleanup must not leave this dedicated group live.
+            return leader
+        try:
+            unrelated = actual([sys.executable, "-B", "-c", "import time; time.sleep(30)"],
+                               stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                               stderr=subprocess.DEVNULL, start_new_session=True)
+            with mock.patch.object(CHECK, "GIT_QUERY_TIMEOUT_SECONDS", 0.25), \
+                 mock.patch.object(CHECK.subprocess, "Popen", side_effect=launch), \
+                 mock.patch.object(CHECK.os, "killpg", wraps=CHECK.os.killpg) as killed:
+                with self.assertRaisesRegex(ValueError, "git_query_timeout"):
+                    CHECK.git(ROOT, "synthetic-orphan-query", max_bytes=32)
+                killed.assert_called_once_with(leader.pid, CHECK.signal.SIGKILL)
+            self.assertIsNotNone(descendant_fd)
+            self.assertTrue(select.select([descendant_fd], [], [], 2)[0],
+                            "failed query left its stdout-holding descendant alive")
+            self.assertIsNone(unrelated.poll(), "an unrelated process group was terminated")
+        finally:
+            # Cleanup must also work when a regression assertion or the query
+            # itself fails. pidfd targets the captured descendant identity.
+            try:
+                if descendant_fd is not None:
+                    try:
+                        CHECK.signal.pidfd_send_signal(descendant_fd, CHECK.signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    select.select([descendant_fd], [], [], 2)
+                if leader is not None:
+                    if leader.returncode is None:
+                        try:
+                            os.killpg(leader.pid, CHECK.signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                    leader.wait(timeout=2)
+                    leader.stdout.close()
+                if unrelated is not None:
+                    if unrelated.poll() is None:
+                        unrelated.kill()
+                    unrelated.wait(timeout=2)
+            finally:
+                for descriptor in list(descriptors):
+                    close(descriptor)
+
+    def test_git_success_does_not_expand_group_cleanup_and_caller_group_is_guarded(self):
+        with mock.patch.object(CHECK, "stop_git_query", wraps=CHECK.stop_git_query) as cleanup:
+            self.assertEqual(self.synthetic_git_query("import os; os.write(1,b'ok')"), b"ok")
+        cleanup.assert_not_called()
+        for group in (os.getpid(), os.getpgrp()):
+            with self.subTest(group=group), mock.patch.object(CHECK.os, "killpg") as kill:
+                with self.assertRaisesRegex(ValueError, "git_termination_failed"):
+                    CHECK.stop_git_query(mock.Mock(pid=group))
+                kill.assert_not_called()
+
+    def test_git_cleanup_never_uses_an_unbounded_wait(self):
+        process = mock.Mock(pid=os.getpgrp() + os.getpid() + 1)
+        process.wait.side_effect = subprocess.TimeoutExpired("synthetic-child", 0.01)
+        with mock.patch.object(CHECK.os, "killpg") as kill:
+            with self.assertRaisesRegex(ValueError, "git_reap_timeout"):
+                CHECK.stop_git_query(process)
+        kill.assert_called_once_with(process.pid, CHECK.signal.SIGKILL)
+        process.wait.assert_called_once_with(timeout=CHECK.GIT_REAP_TIMEOUT_SECONDS)
+        process.reset_mock()
+        process.wait.side_effect = None
+        process.wait.return_value = 0
+        with mock.patch.object(CHECK.os, "killpg", side_effect=PermissionError):
+            with self.assertRaisesRegex(ValueError, "git_termination_failed"):
+                CHECK.stop_git_query(process)
+        process.wait.assert_called_once_with(timeout=CHECK.GIT_REAP_TIMEOUT_SECONDS)
+
     def test_history_accepts_public_baseline_and_upgrade_with_remote(self):
         with repository() as (repo, _):
             baseline = repo.commit(public_fixture(legacy=True))
@@ -696,18 +893,224 @@ class ExportSafety(unittest.TestCase):
             rows = CHECK.history_findings(repo.root, baseline=baseline)
             self.assertTrue(rows[1]["commit-metadata"]["private_path"])
 
-    def test_history_rejects_unapproved_root_and_merge(self):
+    def test_history_rejects_unapproved_root_and_accepts_ancestor_second_parent(self):
         with repository() as (repo, _):
             baseline = repo.commit(public_fixture(legacy=True))
-            repo.commit(public_fixture())
+            main = repo.commit(public_fixture())
             with self.assertRaises(ValueError):
                 CHECK.history_findings(repo.root)
-            main = repo.git("rev-parse", "HEAD")
             tree = repo.git("rev-parse", "HEAD^{tree}")
-            merge = repo.git("commit-tree", tree, "-p", main, "-p", baseline, "-m", "Synthetic merge")
+            for parents in ((main, baseline), (baseline, main)):
+                merge = repo.commit_tree(tree, parents, "Synthetic ancestor merge " + parents[0])
+                repo.git("update-ref", "HEAD", merge)
+                self.assertEqual(CHECK.history_findings(repo.root, baseline=baseline), [{}, {}, {}])
+
+    def test_history_complete_diamonds_ignore_dates_and_scan_each_unique_commit(self):
+        with repository() as (repo, _):
+            baseline = repo.commit(public_fixture(legacy=True))
+            tree = repo.stage(public_fixture())
+            commits, tip = [baseline], baseline
+            for layer in range(3):
+                left = repo.commit_tree(tree, [tip], f"left {layer}", date="2030-01-01T00:00:00+0000")
+                right = repo.commit_tree(tree, [tip], f"right {layer}", date="2000-01-01T00:00:00+0000")
+                tip = repo.commit_tree(tree, [left, right], f"diamond {layer}", date="1990-01-01T00:00:00+0000")
+                commits.extend((left, right, tip))
+            joined = repo.commit_tree(tree, [tip, right], "consecutive merge")
+            commits.append(joined)
+            repo.git("update-ref", "HEAD", joined)
+            actual = CHECK.git
+            scanned = []
+            def record(root, *args, **kwargs):
+                if args[:2] == ("cat-file", "commit"):
+                    scanned.append(args[2])
+                return actual(root, *args, **kwargs)
+            with mock.patch.object(CHECK, "git", side_effect=record), \
+                 mock.patch.object(CHECK, "tree_files", wraps=CHECK.tree_files) as trees:
+                rows = CHECK.history_findings(repo.root, baseline=baseline)
+            self.assertEqual(rows, [{} for _ in commits])
+            self.assertEqual(CHECK.Counter(scanned), CHECK.Counter(commits))
+            self.assertEqual(trees.call_count, len(commits))
+
+    def test_history_both_branches_deleted_canaries_survive_a_clean_merge(self):
+        with repository() as (repo, _):
+            baseline = repo.commit(public_fixture(legacy=True))
+            files = public_fixture()
+            private = ("/" + "home/example/dag-canary").encode()
+            clean_tree = repo.stage(files)
+            left_tree = repo.stage(files | {"deleted-canary.json": private})
+            left = repo.commit_tree(left_tree, [baseline], "left before deletion")
+            left_clean = repo.commit_tree(clean_tree, [left], "left after deletion")
+            right_tree = repo.stage(files | {"README.md": base64.b64encode(private + b"\0")})
+            right = repo.commit_tree(right_tree, [baseline], "right before deletion")
+            right_clean = repo.commit_tree(clean_tree, [right], "right after deletion")
+            merged = repo.commit_tree(clean_tree, [left_clean, right_clean], "clean merge")
+            repo.git("update-ref", "HEAD", merged)
+            rows = CHECK.history_findings(repo.root, baseline=baseline)
+            self.assertTrue(any(row.get("deleted-canary.json", {}).get("unexpected_file") for row in rows))
+            self.assertTrue(any(row.get("README.md", {}).get("private_path") for row in rows))
+            self.assertFalse(rows[-1])
+            self.assertEqual(len(rows), 6)
+
+    def test_history_same_tree_keeps_both_branch_and_merge_metadata(self):
+        with repository() as (repo, _):
+            baseline = repo.commit(public_fixture(legacy=True))
+            tree = repo.stage(public_fixture())
+            private = ("/" + "home/example/metadata-canary").encode()
+            credential = ("gh" + "p_" + "A" * 30).encode()
+            left = repo.commit_tree(tree, [baseline], base64.b64encode(private).decode())
+            right = repo.commit_tree(tree, [baseline], base64.b64encode(credential + b"\0").decode())
+            merge = repo.commit_tree(tree, [left, right], base64.b64encode(private.hex().encode()).decode())
             repo.git("update-ref", "HEAD", merge)
-            with self.assertRaises(ValueError):
+            rows = CHECK.history_findings(repo.root, baseline=baseline)
+            self.assertEqual(sum("commit-metadata" in row for row in rows), 3)
+            self.assertEqual(sum(bool(row.get("commit-metadata", {}).get("private_path")) for row in rows), 2)
+            self.assertEqual(sum(bool(row.get("commit-metadata", {}).get("credential_shape")) for row in rows), 1)
+
+    def test_history_second_root_is_rejected(self):
+        with repository() as (repo, _):
+            baseline = repo.commit(public_fixture(legacy=True))
+            tree = repo.stage(public_fixture())
+            unrelated = repo.commit_tree(tree, [], "unrelated root")
+            merge = repo.commit_tree(tree, [baseline, unrelated], "unrelated merge")
+            repo.git("update-ref", "HEAD", merge)
+            with self.assertRaisesRegex(ValueError, "unexpected_history_root"):
                 CHECK.history_findings(repo.root, baseline=baseline)
+
+    def test_history_missing_objects_and_noncommit_parents_fail_closed(self):
+        with repository() as (repo, _):
+            baseline = repo.commit(public_fixture(legacy=True))
+            tree = repo.stage(public_fixture())
+            ancestor = repo.commit_tree(tree, [baseline], "deep parent")
+            left = repo.commit_tree(tree, [ancestor], "left")
+            right = repo.commit_tree(tree, [ancestor], "right")
+            merge = repo.commit_tree(tree, [left, right], "complete merge")
+            repo.git("update-ref", "HEAD", merge)
+            blob = repo.git("rev-parse", tree + ":README.md")
+            for label, oid in (("first-parent", left), ("second-parent", right),
+                               ("deep-ancestor", ancestor), ("root", baseline), ("tree", tree), ("blob", blob)):
+                with self.subTest(missing=label):
+                    target = repo.object_path(oid)
+                    saved = target.read_bytes()
+                    target.unlink()
+                    try:
+                        with self.assertRaises((ValueError, subprocess.CalledProcessError)):
+                            CHECK.history_findings(repo.root, baseline=baseline)
+                    finally:
+                        target.write_bytes(saved)
+            for parent in (blob, tree):
+                with self.subTest(noncommit=parent):
+                    malformed = repo.raw_commit(tree, [baseline, parent])
+                    # Bypass ref validation only in this malformed-object fixture;
+                    # the scanner must reject the graph, not its constructor.
+                    (repo.root / ".git/HEAD").write_text(malformed + "\n")
+                    with self.assertRaises((ValueError, subprocess.CalledProcessError)):
+                        CHECK.history_findings(repo.root, baseline=baseline)
+
+    def test_history_ancestor_modes_cannot_be_hidden_by_cleaning_a_merge(self):
+        with repository() as (repo, _):
+            baseline = repo.commit(public_fixture(legacy=True))
+            files = public_fixture()
+            clean = repo.stage(files)
+            normal = repo.commit_tree(clean, [baseline], "normal side")
+            for mode in ("120000", "160000", "100755"):
+                with self.subTest(mode=mode):
+                    repo.stage(files)
+                    oid = baseline if mode == "160000" else repo.git("rev-parse", clean + ":README.md")
+                    repo.git("update-index", "--cacheinfo", mode + "," + oid + ",README.md")
+                    bad = repo.commit_tree(repo.git("write-tree"), [baseline], "unsafe ancestor " + mode)
+                    repaired = repo.commit_tree(clean, [bad], "cleaned ancestor " + mode)
+                    merged = repo.commit_tree(clean, [normal, repaired], "clean merged tree " + mode)
+                    repo.git("update-ref", "HEAD", merged)
+                    with self.assertRaisesRegex(ValueError, "unsafe_git_entry"):
+                        CHECK.history_findings(repo.root, baseline=baseline)
+
+    def test_history_new_merge_reusing_legacy_tree_gets_no_schema_grant(self):
+        with repository() as (repo, _):
+            baseline = repo.commit(public_fixture(legacy=True))
+            legacy_tree = repo.git("rev-parse", baseline + "^{tree}")
+            current_tree = repo.stage(public_fixture())
+            child = repo.commit_tree(current_tree, [baseline], "current child")
+            merge = repo.commit_tree(legacy_tree, [baseline, child], "new OID old tree")
+            repo.git("update-ref", "HEAD", merge)
+            rows = CHECK.history_findings(repo.root, baseline=baseline)
+            self.assertGreater(rows[-1]["Cargo.toml"]["manifest_mismatch"], 0)
+            self.assertGreater(rows[-1]["src/capture/owner.rs"]["missing_allowed_file"], 0)
+
+    def test_history_commit_parent_and_work_budgets_have_exact_boundaries(self):
+        with repository() as (repo, _):
+            baseline = repo.commit(public_fixture(legacy=True))
+            tree = repo.stage(public_fixture())
+            left = repo.commit_tree(tree, [baseline], "left budget")
+            right = repo.commit_tree(tree, [baseline], "right budget")
+            merge = repo.commit_tree(tree, [left, right], "merge budget")
+            tip = repo.commit_tree(tree, [merge, right], "joined budget")
+            repo.git("update-ref", "HEAD", tip)
+            for constant, boundary, rule in (("HISTORY_MAX_COMMITS", 5, "history_commit_budget_exceeded"),
+                                             ("HISTORY_MAX_PARENT_EDGES", 6, "history_parent_budget_exceeded")):
+                with self.subTest(budget=constant):
+                    with mock.patch.object(CHECK, constant, boundary):
+                        self.assertEqual(CHECK.history_findings(repo.root, baseline=baseline), [{}] * 5)
+                    with mock.patch.object(CHECK, constant, boundary - 1):
+                        with self.assertRaisesRegex(ValueError, rule):
+                            CHECK.history_findings(repo.root, baseline=baseline)
+            actual, sizes = CHECK.git, []
+            def account(root, *args, **kwargs):
+                result = actual(root, *args, **kwargs)
+                sizes.append(len(result))
+                return result
+            with mock.patch.object(CHECK, "git", side_effect=account):
+                self.assertEqual(CHECK.history_findings(repo.root, baseline=baseline), [{}] * 5)
+            query_boundary = len(sizes)
+            with mock.patch.object(CHECK, "HISTORY_MAX_QUERIES", query_boundary):
+                self.assertEqual(CHECK.history_findings(repo.root, baseline=baseline), [{}] * 5)
+            with mock.patch.object(CHECK, "HISTORY_MAX_QUERIES", query_boundary - 1):
+                with self.assertRaisesRegex(ValueError, "history_query_budget_exceeded"):
+                    CHECK.history_findings(repo.root, baseline=baseline)
+            boundary = sum(sizes)
+            with mock.patch.object(CHECK, "HISTORY_MAX_WORK_BYTES", boundary):
+                self.assertEqual(CHECK.history_findings(repo.root, baseline=baseline), [{}] * 5)
+            with mock.patch.object(CHECK, "HISTORY_MAX_WORK_BYTES", boundary - 1):
+                with self.assertRaisesRegex(ValueError, "history_work_budget_exceeded"):
+                    CHECK.history_findings(repo.root, baseline=baseline)
+
+    def test_history_pins_head_and_disables_lazy_fetch_for_every_query(self):
+        with repository() as (repo, _):
+            baseline = repo.commit(public_fixture(legacy=True))
+            tree = repo.stage(public_fixture())
+            head = repo.commit_tree(tree, [baseline], "pinned head")
+            later = repo.commit_tree(tree, [head], "later unpinned child")
+            repo.git("update-ref", "HEAD", head)
+            actual, scanned, moved = CHECK.git, [], False
+            def move_after_pin(root, *args, **kwargs):
+                nonlocal moved
+                result = actual(root, *args, **kwargs)
+                if args == ("rev-parse", "--verify", "HEAD") and not moved:
+                    repo.git("update-ref", "HEAD", later)
+                    moved = True
+                if args[:2] == ("cat-file", "commit"):
+                    scanned.append(args[2])
+                return result
+            with mock.patch.object(CHECK, "git", side_effect=move_after_pin):
+                self.assertEqual(CHECK.history_findings(repo.root, baseline=baseline), [{}, {}])
+            self.assertEqual(scanned, [baseline, head])
+            with mock.patch.object(CHECK.subprocess, "Popen", wraps=CHECK.subprocess.Popen) as processes:
+                CHECK.history_findings(repo.root, baseline=baseline)
+            self.assertTrue(processes.call_args_list)
+            self.assertTrue(all(call.kwargs["env"]["GIT_NO_LAZY_FETCH"] == "1" for call in processes.call_args_list))
+
+    def test_history_shallow_and_grafts_are_still_rejected(self):
+        with repository() as (repo, _):
+            baseline = repo.commit(public_fixture(legacy=True))
+            for target, contents in ((repo.root / ".git/shallow", baseline + "\n"),
+                                     (repo.root / ".git/info/grafts", "")):
+                with self.subTest(view=target.name):
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text(contents)
+                    try:
+                        with self.assertRaisesRegex(ValueError, "incomplete_or_rewritten_history_view"):
+                            CHECK.history_findings(repo.root, baseline=baseline)
+                    finally:
+                        target.unlink()
 
     def test_history_rejects_replace_refs(self):
         with repository() as (repo, _):

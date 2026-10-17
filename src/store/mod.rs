@@ -8,28 +8,248 @@
 //!
 //! This module also owns record indexing, schema/contract validation, streaming
 //! event verification, atomic publication, and legacy compatibility reads. A
-//! finalization marker proves only that the structured metadata and event bytes
-//! named by that marker were published and verified. It does not authenticate
-//! their origin, cover the raw trace, prove capture success, or guarantee that a
-//! completed rename survived a power loss.
+//! default finalization marker binds structured metadata/events only. Opt-in
+//! trace-v1 additionally binds a raw normalization-stream receipt; its raw bytes
+//! are verified independently when loaded. Neither protocol authenticates origin,
+//! proves capture success, nor guarantees that a rename survived a power loss.
+//!
+//! Selection, validation and publication are separate trust boundaries: an
+//! index label helps locate an entry, supported wire facts are checked when it
+//! is loaded, and the marker binds the selected protocol's structured bytes. Loading never asks
+//! the parser to reconstruct or strengthen an old capture's observations.
+//!
+//! 中文阅读提示：目录 fd 是 I/O 的锚点，显示路径不是操作权限。锁只协调遵守本协议的
+//! recorder/delete；它不阻止外部同权限进程改文件。当前验证覆盖格式版本、部分字段组合、
+//! 计数、证据行范围、current 事件形状和字节摘要；trace-v1 单独核验 raw 字节，不核验
+//! raw 中的 syscall 意义或归一化完整性，也不加强旧记录的事实。
+//! 读取和写入遵守下面的容量/JSON 节点预算；索引名称数量仍随记录数增长。
+
+pub(crate) mod deletion;
 
 use crate::model::{
-    Event, LoadOutcome, Metadata, RecordSummary, Run, StorageIntegrity, StorageLoadFailure,
-    StorageLoadFailureKind,
+    ContractResult, ContractViolation, Event, EventFacts, LoadOutcome, Metadata, RawIntegrity,
+    RawManifest, RawReceipt, RecordSummary, Run, StorageIntegrity, StorageLoadFailure,
+    StorageLoadFailureKind, validate_metadata_contract, validate_run_contract_facts,
 };
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
-    ffi::{CStr, CString},
+    ffi::{CStr, CString, OsStr},
     fs::{self, File, OpenOptions},
     io::{BufRead, BufReader, Read, Seek, SeekFrom, Write},
     os::fd::{AsRawFd, FromRawFd},
-    os::unix::fs::OpenOptionsExt,
+    os::unix::{ffi::OsStrExt, fs::OpenOptionsExt},
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
+
+/// Storage-operation budgets, not wire-schema limits or corruption evidence.
+///
+/// A multi-megabyte argv/environment remains usable, while one stored document
+/// cannot demand unbounded DTO/container memory. The file/count budgets also
+/// bound collect-mode growth; validate-only listing uses the same policy. These
+/// limits do not promise recovery from every process-wide allocator/RLIMIT failure.
+const MAX_METADATA_BYTES: usize = 8 * 1024 * 1024;
+const MAX_MARKER_BYTES: usize = 64 * 1024;
+const MAX_EVENT_LINE_BYTES: usize = 8 * 1024 * 1024;
+const MAX_EVENT_FILE_BYTES: u64 = 256 * 1024 * 1024;
+const MAX_EVENT_COUNT: usize = 1_000_000;
+const MAX_JSON_VALUES: usize = 65_536;
+/// Bound both recursion and retained ancestor descriptors during deletion.
+/// The record root is depth zero; preflight rejects excess before any unlink.
+const MAX_DELETE_DEPTH: usize = 128;
+
+fn resource_limit(display: &str, budget: &str, limit: impl std::fmt::Display) -> std::io::Error {
+    std::io::Error::other(format!(
+        "{display}: resource limit exceeded ({budget}: {limit})"
+    ))
+}
+
+/// Reserve explicit capacity fallibly, growing geometrically within a hard cap.
+///
+/// This avoids both infallible Vec growth and per-byte reallocations. Serde's
+/// internal allocations are separately bounded by byte and JSON-value budgets;
+/// its allocator failures cannot be intercepted by this helper.
+fn reserve_bounded<T>(
+    buffer: &mut Vec<T>,
+    required: usize,
+    limit: usize,
+    display: &str,
+) -> std::io::Result<()> {
+    if required > limit {
+        return Err(resource_limit(display, "capacity", limit));
+    }
+    if required > buffer.capacity() {
+        let target = required.max(buffer.capacity().saturating_mul(2)).min(limit);
+        buffer
+            .try_reserve_exact(target - buffer.len())
+            .map_err(|error| {
+                std::io::Error::new(
+                    std::io::ErrorKind::OutOfMemory,
+                    format!("{display}: cannot reserve bounded buffer: {error}"),
+                )
+            })?;
+    }
+    Ok(())
+}
+
+fn append_bounded(
+    buffer: &mut Vec<u8>,
+    bytes: &[u8],
+    limit: usize,
+    display: &str,
+) -> std::io::Result<()> {
+    let required = buffer
+        .len()
+        .checked_add(bytes.len())
+        .ok_or_else(|| resource_limit(display, "bytes", limit))?;
+    reserve_bounded(buffer, required, limit, display)?;
+    buffer.extend_from_slice(bytes);
+    Ok(())
+}
+
+/// Count allocation-bearing JSON tokens without constructing a JSON tree.
+///
+/// Each string (including keys), scalar and container counts once. Escaped
+/// punctuation inside strings does not count. This is a resource preflight,
+/// not a syntax validator: serde still decides whether bounded input is valid.
+fn check_json_budget(bytes: &[u8], display: &str) -> std::io::Result<()> {
+    let mut values = 0usize;
+    let mut cursor = 0usize;
+    while cursor < bytes.len() {
+        match bytes[cursor] {
+            b'"' => {
+                values += 1;
+                cursor += 1;
+                while cursor < bytes.len() {
+                    match bytes[cursor] {
+                        b'\\' => cursor = cursor.saturating_add(2),
+                        b'"' => {
+                            cursor += 1;
+                            break;
+                        }
+                        _ => cursor += 1,
+                    }
+                }
+            }
+            b'{' | b'[' => {
+                values += 1;
+                cursor += 1;
+            }
+            b'}' | b']' | b',' | b':' | b' ' | b'\n' | b'\r' | b'\t' => cursor += 1,
+            _ => {
+                values += 1;
+                cursor += 1;
+                while cursor < bytes.len()
+                    && !matches!(
+                        bytes[cursor],
+                        b'{' | b'['
+                            | b'}'
+                            | b']'
+                            | b','
+                            | b':'
+                            | b'"'
+                            | b' '
+                            | b'\n'
+                            | b'\r'
+                            | b'\t'
+                    )
+                {
+                    cursor += 1;
+                }
+            }
+        }
+        if values > MAX_JSON_VALUES {
+            return Err(resource_limit(display, "JSON values", MAX_JSON_VALUES));
+        }
+    }
+    Ok(())
+}
+
+/// Read without read_to_end's implicit growth; recheck the cap during every chunk.
+///
+/// The initial stat rejects obvious excess but is not a concurrency snapshot.
+/// A file growing after stat still cannot grow this owned buffer past the cap.
+fn read_bounded(file: &mut File, limit: usize, display: &str) -> std::io::Result<Vec<u8>> {
+    if stat_length(&file_stat(file)?)? > limit as u64 {
+        return Err(resource_limit(display, "bytes", limit));
+    }
+    let mut bytes = Vec::new();
+    let mut scratch = [0u8; 64 * 1024];
+    loop {
+        let read = file.read(&mut scratch)?;
+        if read == 0 {
+            return Ok(bytes);
+        }
+        append_bounded(&mut bytes, &scratch[..read], limit, display)?;
+    }
+}
+
+/// Bound a line before copying from the fixed BufReader scratch buffer.
+fn read_bounded_line(
+    reader: &mut impl BufRead,
+    line: &mut Vec<u8>,
+    limit: usize,
+) -> std::io::Result<usize> {
+    line.clear();
+    loop {
+        let available = reader.fill_buf()?;
+        if available.is_empty() {
+            return Ok(line.len());
+        }
+        let end = available.iter().position(|byte| *byte == b'\n');
+        let take = end.map_or(available.len(), |index| index + 1);
+        append_bounded(line, &available[..take], limit, "events.jsonl line")?;
+        reader.consume(take);
+        if end.is_some() {
+            return Ok(line.len());
+        }
+    }
+}
+
+/// Fallible, capped serializer sink used before any destination is published.
+struct BoundedJson {
+    bytes: Vec<u8>,
+    limit: usize,
+    display: &'static str,
+}
+
+impl Write for BoundedJson {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        append_bounded(&mut self.bytes, bytes, self.limit, self.display)?;
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+fn serialize_bounded<T: Serialize>(
+    value: &T,
+    limit: usize,
+    display: &'static str,
+    pretty: bool,
+) -> Result<Vec<u8>> {
+    let mut output = BoundedJson {
+        bytes: Vec::new(),
+        limit,
+        display,
+    };
+    let result = if pretty {
+        serde_json::to_writer_pretty(&mut output, value)
+    } else {
+        serde_json::to_writer(&mut output, value)
+    };
+    result.map_err(|error| unavailable(format!("{display}: bounded serialization: {error}")))?;
+    check_json_budget(&output.bytes, display).map_err(|error| unavailable_io(display, error))?;
+    Ok(output.bytes)
+}
+
 /// Resolve the storage root selected by CLI input or the standard data paths.
+///
+/// This selects a spelling only. Opening that spelling and retaining directory
+/// identity are the responsibility of [`StorageRoot`], not environment lookup.
 pub(crate) fn root(explicit: Option<PathBuf>) -> Result<PathBuf> {
     explicit
         .or_else(|| {
@@ -44,11 +264,16 @@ pub(crate) fn root(explicit: Option<PathBuf>) -> Result<PathBuf> {
         })
         .context("specify --storage: HOME and XDG_DATA_HOME are unset")
 }
-/// Process-scoped advisory lock held by its backing file descriptor.
+/// Advisory recorder/delete lock retained by its owned backing descriptor.
+///
+/// A stale lock-file name is harmless; exclusion comes from `flock` on the
+/// opened inode. This coordinates cooperating operations and does not prevent
+/// an external writer from changing entries or replacing the lock-file name.
+/// The backing file stores no record payload. Explicit record writers own
+/// durability; syncing an empty file cannot persist this kernel lock state.
 pub(crate) struct Lock(std::fs::File);
 impl Drop for Lock {
     fn drop(&mut self) {
-        let _ = self.0.sync_all();
         // Close also releases flock, but an explicit unlock makes the lock
         // available before any descriptor teardown work can overlap another
         // in-process façade attempt.
@@ -62,6 +287,9 @@ impl Drop for Lock {
 ///
 /// All structural operations are relative to the held descriptors. The original
 /// path is retained only to reproduce the existing user-facing evidence path.
+/// Opening the root resolves its configured path once; later operations do not
+/// reopen that spelling to recover authority. A renamed root may therefore keep
+/// working while its retained display path no longer locates the same directory.
 pub(crate) struct StorageRoot {
     root_dir: File,
     runs_dir: File,
@@ -74,6 +302,9 @@ pub(crate) struct StorageRoot {
 /// cannot accidentally continue through a path that has been renamed or swapped.
 /// Initial metadata is written once; finalization consumes this writer, even on
 /// failure. Neither retry nor concurrent finalization can reuse its authority.
+/// The value grants one capture permission to publish one record; it does not
+/// decide the target outcome or the meaning of capture completeness. Those facts
+/// arrive from capture as metadata and are checked only against stored contracts.
 pub(crate) struct RunWriter {
     storage: StorageRoot,
     _lock: Lock,
@@ -84,9 +315,16 @@ pub(crate) struct RunWriter {
     name: String,
     evidence_dir: PathBuf,
     initial_metadata: InitialMetadata,
+    /// Receipt of the last actual normalization traversal, never a later hash-only read.
+    trace_receipt: Option<RawReceipt>,
+    /// Initial metadata freezes whether normalization must produce a trace-v1 receipt.
+    trace_contract: bool,
 }
 
 /// A failed initialization is terminal: publication may already have occurred.
+///
+/// `Failed` is set before I/O, so a rename followed by a sync error cannot be
+/// mistaken for an untouched destination that is safe to initialize again.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum InitialMetadata {
     Unwritten,
@@ -98,13 +336,27 @@ fn unsafe_directory(error: &std::io::Error) -> bool {
     matches!(error.raw_os_error(), Some(code) if code == libc::ELOOP || code == libc::ENOTDIR)
 }
 
+/// Open the configured directory without following its final path component.
+///
+/// Ancestor resolution still belongs to the OS at this opening boundary. Once
+/// opened, callers use the descriptor rather than resolving this path again.
 fn open_directory(path: &Path) -> std::io::Result<File> {
+    // A trailing separator makes Linux resolve a leaf symlink as an ancestor
+    // before O_NOFOLLOW is applied. Trim only those separators, preserving the
+    // configured ancestor spelling and the special root/empty-path cases.
+    let spelling = path.as_os_str().as_bytes();
+    let mut end = spelling.len();
+    while end > 1 && spelling[end - 1] == b'/' {
+        end -= 1;
+    }
+    let path = Path::new(OsStr::from_bytes(&spelling[..end]));
     OpenOptions::new()
         .read(true)
         .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
         .open(path)
 }
 
+/// Transfer one newly returned syscall descriptor into Rust ownership.
 fn owned_fd(fd: libc::c_int) -> std::io::Result<File> {
     if fd < 0 {
         Err(std::io::Error::last_os_error())
@@ -126,6 +378,11 @@ fn openat_basic(
     owned_fd(unsafe { libc::openat(directory.as_raw_fd(), name.as_ptr(), flags, mode) })
 }
 
+/// Open one checked leaf beneath a held directory, rejecting path traversal.
+///
+/// `openat2` excludes symlinks and mount crossings in that lookup. The ENOSYS
+/// fallback has the narrower guarantees described below; callers must retain
+/// and recheck directory identity rather than assuming a path is immutable.
 fn openat_beneath(
     directory: &File,
     name: &CStr,
@@ -215,6 +472,10 @@ fn file_stat(file: &File) -> std::io::Result<libc::stat> {
     }
 }
 
+/// Compare opened storage inode identity within the current OS operation.
+///
+/// This is a traversal/publication check, not RunDelta's cross-run file identity
+/// or content-equality contract, and it does not lock the file's contents.
 fn same_file(left: &libc::stat, right: &libc::stat) -> bool {
     left.st_dev == right.st_dev && left.st_ino == right.st_ino
 }
@@ -236,6 +497,12 @@ fn stat_length(status: &libc::stat) -> std::io::Result<u64> {
     })
 }
 
+/// Collect entry names as bytes while keeping descriptor use independent of count.
+///
+/// A separately opened directory stream avoids sharing the held directory's
+/// cursor. Names are only candidates: each is inspected/opened later and may
+/// change meanwhile. Enumeration failure must not masquerade as an empty index.
+/// The returned name vector still grows with the directory's entry count.
 fn directory_names(directory: &File) -> std::io::Result<Vec<Vec<u8>>> {
     let duplicate = openat_basic(
         directory,
@@ -305,6 +572,10 @@ fn create_directory_at(parent: &File, name: &CStr, mode: libc::mode_t) -> std::i
     }
 }
 
+/// Validate a user label for storage/display, without interpreting it as a path.
+///
+/// Slashes and path-looking labels are intentionally allowed: only generated
+/// IDs may become directory components, after separate validation.
 fn validate_record_name(name: &str) -> Result<()> {
     if name.is_empty() || name.chars().any(char::is_control) {
         bail!("name must be nonempty without control characters");
@@ -312,6 +583,7 @@ fn validate_record_name(name: &str) -> Result<()> {
     Ok(())
 }
 
+/// Reserve the shared exact-match namespace used for both labels and IDs.
 fn reject_name_collision(identities: &[Identity], name: &str) -> Result<()> {
     if identities
         .iter()
@@ -323,6 +595,10 @@ fn reject_name_collision(identities: &[Identity], name: &str) -> Result<()> {
 }
 
 impl StorageRoot {
+    /// Anchor the root and `runs`, optionally creating a previously absent store.
+    ///
+    /// Read-only callers distinguish absence from an unsafe or unreadable tree;
+    /// they must not create storage as a side effect of a load or listing.
     fn open_with(root: &Path, create: bool) -> Result<Option<Self>> {
         if create {
             fs::create_dir_all(root)
@@ -378,6 +654,10 @@ impl StorageRoot {
     }
 
     /// Acquire the recorder/delete lock within this anchored storage root.
+    ///
+    /// Nonblocking acquisition makes contention an explicit error. Read paths
+    /// intentionally do not take this lock: they classify missing finalization
+    /// separately and verify finalized bytes rather than blocking a recorder.
     pub(crate) fn lock(&self) -> Result<Lock> {
         let file = openat_beneath(
             &self.root_dir,
@@ -411,6 +691,10 @@ impl StorageRoot {
     }
 
     /// Start one record while retaining the storage lock and every directory fd.
+    ///
+    /// Time/PID provides the ID spelling, not uniqueness proof; the locked index
+    /// and exclusive directory creation still reject collisions. If setup fails,
+    /// a partial directory may remain for inspection rather than being repaired.
     pub(crate) fn begin_run(self, name: &str) -> Result<RunWriter> {
         let id = format!(
             "{:x}-{}",
@@ -420,6 +704,7 @@ impl StorageRoot {
         self.begin_run_with_id(name, id)
     }
 
+    /// Recheck reservations under the lock before granting the writer its fds.
     fn begin_run_with_id(self, name: &str, id: String) -> Result<RunWriter> {
         validate_record_name(name)?;
         if !valid_id(&id) {
@@ -481,11 +766,17 @@ impl StorageRoot {
             name: name.to_owned(),
             evidence_dir,
             initial_metadata: InitialMetadata::Unwritten,
+            trace_receipt: None,
+            trace_contract: false,
         })
     }
 }
 
 impl RunWriter {
+    /// Check that each stored leaf still names this writer's held inode.
+    ///
+    /// These observations reject detected directory/file swaps; they do not
+    /// make subsequent operations transactional against noncooperating writers.
     fn ensure_run_identity(&self) -> Result<()> {
         let component = CString::new(self.id.as_bytes()).expect("validated IDs contain no NUL");
         ensure_entry_identity(&self.storage.runs_dir, &component, &self.run_dir)
@@ -503,6 +794,8 @@ impl RunWriter {
     }
 
     /// Existing user-visible evidence directory string.
+    ///
+    /// Reporting may use this spelling; storage I/O must keep using held fds.
     pub(crate) fn evidence_dir(&self) -> &Path {
         &self.evidence_dir
     }
@@ -519,7 +812,7 @@ impl RunWriter {
             bail!("metadata identity does not match the active record writer");
         }
         validate_metadata_contract(metadata)
-            .map_err(|error| anyhow::anyhow!("invalid metadata contract: {error}"))?;
+            .map_err(|error| stored_contract_error("invalid metadata contract", error))?;
         if metadata.state != "running" {
             bail!("initial metadata must describe a running capture");
         }
@@ -527,6 +820,7 @@ impl RunWriter {
         self.initial_metadata = InitialMetadata::Failed;
         metadata_at(&self.run_dir, metadata)?;
         self.initial_metadata = InitialMetadata::Written;
+        self.trace_contract = metadata.schema_version == 4;
         Ok(())
     }
 
@@ -572,31 +866,76 @@ impl RunWriter {
     /// A trailing LF (and any preceding CR) is retained so an incremental
     /// parser can distinguish a terminated final line. Each line is validated
     /// as UTF-8 independently, and memory use is bounded by the longest line.
+    ///
+    /// The line bound is not a fixed quota, and the consumer may retain more
+    /// state. A consumer/UTF-8 error stops this traversal after any earlier
+    /// callbacks; capture decides whether their partial results can be retained.
+    /// For trace-v1, successful EOF freezes a byte/line/digest receipt of this
+    /// exact input. Failure freezes an unverified reason; hash-only I/O cannot
+    /// replace it. The default structured-only contract does not hash raw here.
     pub(crate) fn for_each_trace_line<F>(&mut self, mut consume: F) -> std::io::Result<()>
     where
         F: FnMut(&str) -> std::io::Result<()>,
     {
-        self.ensure_run_identity()
-            .map_err(|error| std::io::Error::other(format!("{error:#}")))?;
-        self.trace_file.seek(SeekFrom::Start(0))?;
-        let mut reader = BufReader::new(&mut self.trace_file);
-        let mut line = Vec::new();
-        loop {
-            line.clear();
-            if reader.read_until(b'\n', &mut line)? == 0 {
-                return Ok(());
+        // A failed or interrupted new traversal cannot retain a previous EOF
+        // receipt. Hash precisely the bytes delivered to the consumer, including
+        // framing; a later read-back only verifies them and never creates one.
+        self.trace_receipt = None;
+        let trace_v1 = self.trace_contract;
+        let traversal = (|| {
+            self.ensure_run_identity()
+                .map_err(|error| std::io::Error::other(format!("{error:#}")))?;
+            self.trace_file.seek(SeekFrom::Start(0))?;
+            let mut reader = BufReader::new(&mut self.trace_file);
+            let mut line = Vec::new();
+            let mut hasher = trace_v1.then(Sha256::new);
+            let mut bytes = 0u64;
+            let mut logical_lines = 0usize;
+            loop {
+                line.clear();
+                if reader.read_until(b'\n', &mut line)? == 0 {
+                    return Ok(hasher.map(|hasher| RawReceipt::Parsed {
+                        bytes,
+                        logical_lines,
+                        sha256: format!("{:x}", hasher.finalize()),
+                    }));
+                }
+                if let Some(hasher) = &mut hasher {
+                    bytes = checked_byte_count(bytes, line.len())?;
+                    logical_lines = logical_lines.checked_add(1).ok_or_else(|| {
+                        std::io::Error::other("raw trace logical line count exceeds usize")
+                    })?;
+                    hasher.update(&line);
+                }
+                let line = std::str::from_utf8(&line).map_err(|error| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!("trace line is not valid UTF-8: {error}"),
+                    )
+                })?;
+                consume(line)?;
             }
-            let line = std::str::from_utf8(&line).map_err(|error| {
-                std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    format!("trace line is not valid UTF-8: {error}"),
-                )
-            })?;
-            consume(line)?;
+        })();
+        match traversal {
+            Ok(receipt) => {
+                self.trace_receipt = receipt;
+                Ok(())
+            }
+            Err(error) => {
+                self.trace_receipt = trace_v1.then(|| RawReceipt::Unverified {
+                    reason: format!("normalization stream did not reach a successful EOF: {error}"),
+                });
+                Err(error)
+            }
         }
     }
 
     /// Read the trace inode held by this writer after the collector exits.
+    ///
+    /// Compatibility/test adapter: unlike `for_each_trace_line`, this retains the
+    /// whole UTF-8 input. Both adapters assume capture has stopped the collector;
+    /// this method itself neither waits for it nor establishes a stable snapshot.
+    #[cfg(test)]
     pub(crate) fn read_trace(&mut self) -> std::io::Result<String> {
         self.ensure_run_identity()
             .map_err(|error| std::io::Error::other(format!("{error:#}")))?;
@@ -606,7 +945,7 @@ impl RunWriter {
         Ok(raw)
     }
 
-    /// Publish events, final metadata and the finalization marker through runfd.
+    /// Publish events, metadata and the selected protocol's last finalization marker.
     ///
     /// Consumes write authority on both success and failure. The lock and all
     /// anchored descriptors stay alive through publication, read-back and cleanup;
@@ -618,8 +957,27 @@ impl RunWriter {
         if metadata.id != self.id || metadata.name != self.name {
             bail!("metadata identity does not match the active record writer");
         }
+        if (metadata.schema_version == 4) != self.trace_contract {
+            bail!("final metadata changes the initially selected recording contract");
+        }
         self.ensure_run_identity()?;
-        finish_at(&self.run_dir, metadata, events)
+        let manifest = (metadata.schema_version == 4).then(|| RawManifest {
+            schema_version: 1,
+            run_id: self.id.clone(),
+            file: "raw/trace.log".into(),
+            receipt: self
+                .trace_receipt
+                .unwrap_or_else(|| RawReceipt::Unverified {
+                    reason: "raw normalization traversal was not attempted".into(),
+                }),
+        });
+        finish_at_with_manifest_control(
+            &self.run_dir,
+            metadata,
+            events,
+            manifest.as_ref(),
+            AtomicControl::default(),
+        )
     }
 }
 
@@ -632,14 +990,14 @@ fn open_existing(root: &Path) -> Result<Option<StorageRoot>> {
     StorageRoot::open_with(root, false)
 }
 
-/// Path compatibility wrapper retained while callers migrate to `StorageRoot`.
-#[allow(dead_code)]
+/// Test compatibility wrapper for the path-based locking oracle.
+#[cfg(test)]
 fn lock(root: &Path) -> Result<Lock> {
     open(root)?.lock()
 }
 
-/// Legacy path writer retained until the RF-630 cleanup pass.
-#[allow(dead_code)]
+/// Test compatibility writer for the legacy path-based oracle.
+#[cfg(test)]
 fn metadata(dir: &Path, m: &Metadata) -> Result<()> {
     let directory =
         open_directory(dir).map_err(|error| unavailable_io("open record directory", error))?;
@@ -651,6 +1009,10 @@ struct Identity {
     id: String,
     name: String,
 }
+/// One scan result carrying selection hints separately from opened authority.
+///
+/// An unknown/malformed label never creates metadata. Errors stay attached so
+/// reservation can fail closed while loading applies its own integrity priority.
 struct Entry {
     run_dir: Option<File>,
     directory: String,
@@ -662,23 +1024,26 @@ struct Entry {
     // authority for the record's integrity classification.
     index_error: Option<anyhow::Error>,
 }
+/// Recognize the complete generated ID spelling used as one directory component.
+///
+/// Recognition admits selection, not trust in the record's bytes. No prefix,
+/// normalization or fuzzy match is substituted for the user's exact key.
 fn valid_id(id: &str) -> bool {
-    id.split_once('-').is_some_and(|(time, pid)| {
-        !time.is_empty()
-            && time.bytes().all(|b| b.is_ascii_hexdigit())
-            && u128::from_str_radix(time, 16).is_ok()
-            && !pid.is_empty()
-            && pid.bytes().all(|b| b.is_ascii_digit())
-            && pid.parse::<u32>().is_ok_and(|p| p > 0)
-    })
-}
-fn read_file_at(directory: &File, name: &CStr) -> std::io::Result<Vec<u8>> {
-    let mut file = open_regular_file_at(directory, name)?;
-    let mut bytes = vec![];
-    file.read_to_end(&mut bytes)?;
-    Ok(bytes)
+    crate::model::valid_record_id(id)
 }
 
+/// Read one anchored regular structured file within its explicit byte budget.
+///
+/// Metadata/marker callers use whole-file decoding; event callers use streaming.
+fn read_file_at(directory: &File, name: &CStr, limit: usize) -> std::io::Result<Vec<u8>> {
+    let mut file = open_regular_file_at(directory, name)?;
+    read_bounded(&mut file, limit, "structured record file")
+}
+
+/// Open a leaf nonblockingly, then reject devices/FIFOs before reading it.
+///
+/// O_NONBLOCK prevents a substituted FIFO from hanging the open before its type
+/// can be checked. The opened descriptor remains the subsequent read authority.
 fn open_regular_file_at(directory: &File, name: &CStr) -> std::io::Result<File> {
     let file = openat_beneath(
         directory,
@@ -700,9 +1065,26 @@ fn open_required_record_file(directory: &File, name: &CStr, display: &str) -> Re
         .map_err(|error| required_record_file_error(display, error))
 }
 
+/// Verify marker length before streaming the anchored bytes and comparing SHA-256.
+///
+/// Resource ceilings precede hashing. Within them, byte corruption still has
+/// priority over interpreting a possibly misleading DTO/schema.
 fn verified_file_check(file: &mut File, expected: &FileCheck, display: &str) -> Result<FileCheck> {
     let status = file_stat(file).map_err(|error| unavailable_io(display, error))?;
     let length = stat_length(&status).map_err(|error| unavailable_io(display, error))?;
+    let limit = if display == "events.jsonl" {
+        MAX_EVENT_FILE_BYTES
+    } else if display == "raw-integrity.json" {
+        MAX_MARKER_BYTES as u64
+    } else {
+        MAX_METADATA_BYTES as u64
+    };
+    if length > limit {
+        return Err(unavailable_io(
+            display,
+            resource_limit(display, "bytes", limit),
+        ));
+    }
     if length != expected.bytes {
         return Err(corrupt(format!(
             "{display}: byte count or SHA-256 mismatch"
@@ -713,15 +1095,16 @@ fn verified_file_check(file: &mut File, expected: &FileCheck, display: &str) -> 
     Ok(actual)
 }
 
+/// Rewind and materialize an already opened file.
+///
+/// Finalized readers recheck these bytes against the marker before decoding.
 fn read_open_file(file: &mut File, display: &str) -> Result<Vec<u8>> {
     file.seek(SeekFrom::Start(0))
-        .and_then(|_| {
-            let mut bytes = Vec::new();
-            file.read_to_end(&mut bytes).map(|_| bytes)
-        })
+        .and_then(|_| read_bounded(file, MAX_METADATA_BYTES, display))
         .map_err(|error| unavailable_io(display, error))
 }
 
+/// Missing required structure is damage; inability to access it is not evidence of damage.
 fn required_record_file_error(display: &str, error: std::io::Error) -> anyhow::Error {
     if error.kind() == std::io::ErrorKind::NotFound {
         corrupt(format!("{display}: {error}"))
@@ -731,34 +1114,32 @@ fn required_record_file_error(display: &str, error: std::io::Error) -> anyhow::E
 }
 
 #[derive(Deserialize)]
+/// Minimal, untrusted label view used before full record verification.
 struct MetadataIndexHint {
     name: Option<String>,
 }
 
+/// Read only a usable label for exact indexing, preserving real I/O failures.
+///
+/// Malformed JSON or label fields may hide a label, leaving the directory ID
+/// selectable. This does not prove that an unknown historical label is free,
+/// validate metadata, or authorize reconstruction of the missing value.
 fn metadata_name_hint(directory: &File) -> Result<Option<String>> {
-    let file = match open_regular_file_at(directory, c"metadata.json") {
+    let mut file = match open_regular_file_at(directory, c"metadata.json") {
         Ok(file) => file,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(unavailable_io("read record label", error)),
     };
-    let hint = match serde_json::from_reader::<_, MetadataIndexHint>(BufReader::with_capacity(
-        64 * 1024,
-        file,
-    )) {
+    let bytes = read_bounded(&mut file, MAX_METADATA_BYTES, "read record label")
+        .map_err(|error| unavailable_io("read record label", error))?;
+    check_json_budget(&bytes, "read record label")
+        .map_err(|error| unavailable_io("read record label", error))?;
+    let hint = match serde_json::from_slice::<MetadataIndexHint>(&bytes) {
         Ok(hint) => hint,
         // Missing or malformed stored labels remain unknown index hints. An
-        // actual I/O failure cannot establish that a label is absent and must
-        // prevent the writer from reserving a potentially duplicate label.
-        Err(error) if !error.is_io() => return Ok(None),
-        Err(error) => {
-            return Err(unavailable_io(
-                "read record label",
-                std::io::Error::new(
-                    error.io_error_kind().unwrap_or(std::io::ErrorKind::Other),
-                    error,
-                ),
-            ));
-        }
+        // read/resource failure above cannot establish that a label is absent
+        // and prevents reserving a potentially duplicate label.
+        Err(_) => return Ok(None),
     };
     Ok(hint
         .name
@@ -766,313 +1147,38 @@ fn metadata_name_hint(directory: &File) -> Result<Option<String>> {
 }
 
 #[derive(Deserialize)]
+/// Decode the explicit version before attempting a version-specific DTO.
 struct SchemaHeader {
     schema_version: u32,
 }
 
+/// Distinguish an unreadable header from a readable but unsupported schema.
 fn decode_schema_header(data: &[u8], display: &str) -> Result<u32> {
     serde_json::from_slice::<SchemaHeader>(data)
         .map(|header| header.schema_version)
         .map_err(|error| corrupt(format!("{display}: {error}")))
 }
 
-#[derive(Debug)]
-struct ContractViolation(String);
-
-impl std::fmt::Display for ContractViolation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-type ContractResult = std::result::Result<(), ContractViolation>;
-
-fn contract_violation(message: impl Into<String>) -> ContractViolation {
-    ContractViolation(message.into())
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum StoredState {
-    Running,
-    Completed,
-    CaptureFailed,
-    Interrupted,
-}
-
-impl StoredState {
-    fn parse(value: &str) -> std::result::Result<Self, ContractViolation> {
-        match value {
-            "running" => Ok(Self::Running),
-            "completed" => Ok(Self::Completed),
-            "capture_failed" => Ok(Self::CaptureFailed),
-            "interrupted" => Ok(Self::Interrupted),
-            _ => Err(contract_violation("unknown capture state")),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum StoredCompleteness {
-    Pending,
-    CompleteForSupportedEvents,
-    Partial,
-    Incomplete,
-}
-
-impl StoredCompleteness {
-    fn parse(value: Option<&str>) -> std::result::Result<Self, ContractViolation> {
-        match value {
-            Some("pending") => Ok(Self::Pending),
-            Some("complete_for_supported_events") => Ok(Self::CompleteForSupportedEvents),
-            Some("partial") => Ok(Self::Partial),
-            Some("incomplete") => Ok(Self::Incomplete),
-            Some(_) => Err(contract_violation("unknown capture completeness")),
-            None => Err(contract_violation("completeness is missing")),
-        }
-    }
-}
-
-fn stored_capture_facts(
-    metadata: &Metadata,
-) -> std::result::Result<(StoredState, StoredCompleteness), ContractViolation> {
-    Ok((
-        StoredState::parse(&metadata.state)?,
-        StoredCompleteness::parse(metadata.completeness.as_deref())?,
-    ))
-}
-
-/// Validate facts written by the current metadata schema without applying
-/// current semantics retroactively to legacy free-form records.
-fn validate_metadata_contract(metadata: &Metadata) -> ContractResult {
-    if metadata.exit_code.is_some() && metadata.signal.is_some() {
-        return Err(contract_violation(
-            "target exit code and signal are mutually exclusive",
-        ));
-    }
-    if metadata.collector_exit_code.is_some() && metadata.collector_signal.is_some() {
-        return Err(contract_violation(
-            "collector exit code and signal are mutually exclusive",
-        ));
-    }
-    if metadata.schema_version != 3 {
-        return Ok(());
-    }
-    if !valid_id(&metadata.id) {
-        return Err(contract_violation("ID is not one safe generated component"));
-    }
-    if metadata.name.is_empty() || metadata.name.chars().any(char::is_control) {
-        return Err(contract_violation(
-            "name must be nonempty without control characters",
-        ));
-    }
-    if metadata.command.is_empty() {
-        return Err(contract_violation("command must contain an executable"));
-    }
-    if metadata.tool_version.is_empty() || metadata.cwd.is_empty() || metadata.backend.is_empty() {
-        return Err(contract_violation(
-            "tool version, cwd and backend must be nonempty",
-        ));
-    }
-    let environment = metadata
-        .environment
-        .as_ref()
-        .ok_or_else(|| contract_violation("environment is missing"))?;
-    if environment
-        .keys()
-        .any(|key| key.is_empty() || key.contains('=') || key.chars().any(char::is_control))
-    {
-        return Err(contract_violation(
-            "environment keys must be nonempty without '=' or control characters",
-        ));
-    }
-
-    let (state, completeness) = stored_capture_facts(metadata)?;
-    match (state, completeness) {
-        (StoredState::Running, StoredCompleteness::Pending) => {
-            if metadata.ended.is_some()
-                || metadata.exit_code.is_some()
-                || metadata.signal.is_some()
-                || metadata.collector_exit_code.is_some()
-                || metadata.collector_signal.is_some()
-                || metadata.target_exit_raw.is_some()
-                || !metadata.warnings.is_empty()
-                || metadata.parsed_events != 0
-                || metadata.raw_lines != 0
-            {
-                return Err(contract_violation(
-                    "running metadata contains finalized capture facts",
-                ));
-            }
-        }
-        (
-            StoredState::Completed,
-            StoredCompleteness::CompleteForSupportedEvents | StoredCompleteness::Partial,
-        ) => {
-            if metadata.ended.is_none() {
-                return Err(contract_violation("completed metadata has no end time"));
-            }
-            if completeness == StoredCompleteness::Partial && metadata.warnings.is_empty() {
-                return Err(contract_violation(
-                    "partial metadata records no evidence limitation",
-                ));
-            }
-            if metadata.target_exit_raw.is_none() {
-                return Err(contract_violation(
-                    "completed metadata has no raw target outcome",
-                ));
-            }
-            if metadata.collector_exit_code.is_none() && metadata.collector_signal.is_none() {
-                return Err(contract_violation(
-                    "completed metadata has no collector outcome",
-                ));
-            }
-        }
-        (StoredState::CaptureFailed, StoredCompleteness::Incomplete) => {
-            if metadata.ended.is_none() {
-                return Err(contract_violation("final metadata has no end time"));
-            }
-            if metadata.warnings.is_empty() {
-                return Err(contract_violation(
-                    "failed capture records no failure warning",
-                ));
-            }
-        }
-        (StoredState::Interrupted, StoredCompleteness::Incomplete) => {
-            if metadata.ended.is_none() {
-                return Err(contract_violation("final metadata has no end time"));
-            }
-        }
-        (StoredState::Completed, _) => {
-            return Err(contract_violation(
-                "completed metadata must be complete or partial",
-            ));
-        }
-        (StoredState::CaptureFailed | StoredState::Interrupted, _) => {
-            return Err(contract_violation(
-                "failed or interrupted capture must be incomplete",
-            ));
-        }
-        (StoredState::Running, _) => {
-            return Err(contract_violation("running metadata must be pending"));
-        }
-    }
-
-    if completeness == StoredCompleteness::CompleteForSupportedEvents
-        && !metadata.warnings.is_empty()
-    {
-        return Err(contract_violation(
-            "complete metadata cannot contain capture limitations",
-        ));
-    }
-    if (metadata.exit_code.is_some() || metadata.signal.is_some())
-        && metadata.target_exit_raw.is_none()
-    {
-        return Err(contract_violation(
-            "structured target outcome has no raw target outcome",
-        ));
-    }
-    if completeness == StoredCompleteness::CompleteForSupportedEvents {
-        let target_matches_collector = match (metadata.exit_code, metadata.signal) {
-            (Some(code), None) => {
-                metadata.collector_exit_code == Some(code) && metadata.collector_signal.is_none()
-            }
-            (None, Some(signal)) => {
-                metadata.collector_signal == Some(signal) && metadata.collector_exit_code.is_none()
-            }
-            _ => false,
-        };
-        if !target_matches_collector {
-            return Err(contract_violation(
-                "complete metadata lacks a confirmed target outcome",
-            ));
-        }
-    }
-    Ok(())
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-struct EventFacts {
-    count: usize,
-    first_unsupported_schema: Option<u32>,
-    has_non_v2: bool,
-    invalid_evidence_order: bool,
-    max_end_line: usize,
-    context_uncertain: bool,
-}
-
-impl EventFacts {
-    fn observe(&mut self, event: &Event) {
-        self.count += 1;
-        if !matches!(event.schema_version, 1 | 2) && self.first_unsupported_schema.is_none() {
-            self.first_unsupported_schema = Some(event.schema_version);
-        }
-        self.has_non_v2 |= event.schema_version != 2;
-        self.invalid_evidence_order |=
-            event.evidence.line == 0 || event.evidence.line > event.evidence.end_line;
-        self.max_end_line = self.max_end_line.max(event.evidence.end_line);
-        self.context_uncertain |= event.context_uncertain;
-    }
-
-    fn from_events(events: &[Event]) -> Self {
-        let mut facts = Self::default();
-        for event in events {
-            facts.observe(event);
-        }
-        facts
-    }
-}
-
-/// Validate facts that require both current metadata and normalized events.
-fn validate_run_contract_facts(
-    metadata: &Metadata,
-    events: &EventFacts,
-    finalized: bool,
-) -> ContractResult {
-    validate_metadata_contract(metadata)?;
-    if metadata.schema_version == 3
-        && finalized
-        && StoredState::parse(&metadata.state)? == StoredState::Running
-    {
-        return Err(contract_violation(
-            "finalization marker contradicts running metadata",
-        ));
-    }
-    if metadata.schema_version == 3 && events.has_non_v2 {
-        return Err(contract_violation(
-            "current metadata schema requires only event schema 2",
-        ));
-    }
-    if metadata.parsed_events != events.count {
-        return Err(contract_violation(
-            "metadata parsed event count does not match events",
-        ));
-    }
-    if events.invalid_evidence_order || events.max_end_line > metadata.raw_lines {
-        return Err(contract_violation(
-            "event evidence lines fall outside the recorded raw trace",
-        ));
-    }
-    if metadata.schema_version != 3 {
-        return Ok(());
-    }
-    match StoredCompleteness::parse(metadata.completeness.as_deref())? {
-        StoredCompleteness::CompleteForSupportedEvents if events.context_uncertain => {
-            return Err(contract_violation(
-                "complete metadata contains context-uncertain evidence",
-            ));
-        }
-        _ => {}
-    }
-    Ok(())
-}
-
 fn validate_run_contract(metadata: &Metadata, events: &[Event], finalized: bool) -> ContractResult {
-    validate_run_contract_facts(metadata, &EventFacts::from_events(events), finalized)
+    crate::model::validate_run_contract(metadata, events, finalized)
 }
 
+/// Decode a supported metadata version without migrating its saved evidence.
+///
+/// V2/V3 require their introduced fields. Directory ID agreement is checked
+/// independently of the earlier label hint; current-only rules stay in the
+/// contract validator rather than upgrading legacy records on read.
 fn decode_metadata(data: &[u8], id: &str) -> Result<Metadata> {
+    if data.len() > MAX_METADATA_BYTES {
+        return Err(unavailable_io(
+            "metadata.json",
+            resource_limit("metadata.json", "bytes", MAX_METADATA_BYTES),
+        ));
+    }
+    check_json_budget(data, "metadata.json")
+        .map_err(|error| unavailable_io("metadata.json", error))?;
     let schema_version = decode_schema_header(data, "metadata.json")?;
-    if !matches!(schema_version, 1..=3) {
+    if !matches!(schema_version, 1..=4) {
         return Err(unsupported(format!(
             "unsupported metadata schema {schema_version}"
         )));
@@ -1086,7 +1192,7 @@ fn decode_metadata(data: &[u8], id: &str) -> Result<Metadata> {
         return Err(corrupt("record ID does not match directory"));
     }
     validate_metadata_contract(&m)
-        .map_err(|error| corrupt(format!("metadata contract: {error}")))?;
+        .map_err(|error| stored_contract_error("metadata contract", error))?;
     Ok(m)
 }
 fn selection_error(key: &str, count: usize) -> anyhow::Error {
@@ -1099,6 +1205,11 @@ impl StorageRoot {
     /// Visit one anchored entry at a time. Callers may retain one selected
     /// directory, but listing and label reservation release it before the next
     /// entry so the descriptor bound is independent of the record count.
+    ///
+    /// Sorting the collected names gives deterministic presentation, not a filesystem
+    /// transaction. Names and eventual summaries still occupy count-dependent
+    /// memory. A visitor decides whether one entry error aborts reservation or
+    /// becomes an isolated listing row.
     fn scan(&self, mut visit: impl FnMut(Entry) -> Result<()>) -> Result<()> {
         let mut names: Vec<_> = directory_names(&self.runs_dir)
             .map_err(|error| unavailable_io("enumerate record storage", error))?
@@ -1163,6 +1274,11 @@ impl StorageRoot {
         Ok(())
     }
 
+    /// Retain a candidate only after counting every exact safe ID/label match.
+    ///
+    /// A first match is insufficient: an ID-shaped label can collide with another
+    /// directory ID. The key never becomes a pathname, and an unknown label may
+    /// only be bypassed by selecting its exact recognizable directory ID.
     fn resolve(&self, key: &str) -> Result<Entry> {
         let mut candidate = None;
         let mut count = 0;
@@ -1182,6 +1298,10 @@ impl StorageRoot {
     }
 
     /// Return name/ID reservation facts without treating labels as paths.
+    ///
+    /// Unlike listing, reservation cannot ignore access/enumeration failures:
+    /// doing so could create a duplicate visible label. A malformed label remains
+    /// unknown; its directory ID is reserved without inventing the label.
     fn identities(&self) -> Result<Vec<Identity>> {
         let mut identities = Vec::new();
         self.scan(|entry| {
@@ -1212,28 +1332,20 @@ impl StorageRoot {
         self.delete_resolved(e)
     }
 
+    /// Move the selected inode into explicit isolation before physical cleanup.
+    ///
+    /// The caller holds the cooperating lock. Failed cleanup cannot expose a
+    /// partly deleted active record; same-UID mutation is still outside that lock.
     fn delete_resolved(&self, e: Entry) -> Result<String> {
-        let id = e.id.ok_or_else(|| unavailable("unsafe record directory"))?;
-        let run_dir = e
-            .run_dir
-            .ok_or_else(|| unavailable(format!("unsafe record directory: {}", e.directory)))?;
-        let component = CString::new(id.as_bytes()).expect("validated IDs contain no NUL");
-        ensure_entry_identity(&self.runs_dir, &component, &run_dir).map_err(|error| {
-            unavailable_io(format!("unsafe record directory: {}", e.directory), error)
-        })?;
-        remove_directory_contents(&run_dir)
-            .map_err(|error| unavailable_io(format!("delete {}", e.directory), error))?;
-        // Check again after recursion. A swapped leaf is never traversed, and
-        // AT_REMOVEDIR cannot follow a late symlink if it changes after this check.
-        ensure_entry_identity(&self.runs_dir, &component, &run_dir).map_err(|error| {
-            unavailable_io(format!("unsafe record directory: {}", e.directory), error)
-        })?;
-        unlink_at(&self.runs_dir, &component, libc::AT_REMOVEDIR)
-            .map_err(|error| unavailable_io(format!("delete {}", e.directory), error))?;
-        Ok(id)
+        deletion::isolate(self, e)
     }
 }
 
+/// Check that a current directory entry names the inode already held by a caller.
+///
+/// The observation does not freeze the entry after return. Structural operations
+/// must continue relative to held descriptors and avoid following replacement
+/// leaf symlinks even when another process ignores the advisory lock.
 fn ensure_entry_identity(parent: &File, name: &CStr, opened: &File) -> std::io::Result<()> {
     let expected = file_stat(opened)?;
     let actual = stat_at(parent, name)?;
@@ -1242,7 +1354,7 @@ fn ensure_entry_identity(parent: &File, name: &CStr, opened: &File) -> std::io::
     } else {
         Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
-            "directory entry no longer names the opened directory",
+            "directory entry no longer names the opened inode",
         ))
     }
 }
@@ -1257,7 +1369,47 @@ fn unlink_at(parent: &File, name: &CStr, flags: libc::c_int) -> std::io::Result<
     }
 }
 
-fn remove_directory_contents(directory: &File) -> std::io::Result<()> {
+/// Detect an empty replacement removed after the last identity observation.
+///
+/// Linux leaves an unlinked directory's held inode with zero links. A successful
+/// unlink alone is insufficient: a noncooperating writer can rename the selected
+/// directory and put another empty directory in its place after our precheck.
+/// This postcondition detects that case but cannot roll back replacement removal.
+fn unlink_opened_directory(parent: &File, name: &CStr, opened: &File) -> std::io::Result<()> {
+    ensure_entry_identity(parent, name, opened)?;
+    unlink_at(parent, name, libc::AT_REMOVEDIR)?;
+    if file_stat(opened)?.st_nlink != 0 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "selected directory remains linked after removal",
+        ));
+    }
+    Ok(())
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DeletePass {
+    Preflight,
+    Remove,
+}
+
+/// Recurse through anchored real directories and unlink every other type as a leaf.
+///
+/// `openat_beneath` applies the mount/symlink boundary to each opened child;
+/// its legacy-kernel same-device bind-mount limitation still applies. Recursion
+/// retains ancestor fds up to the depth budget; per-directory name vectors still
+/// occupy memory proportional to the enumerated entries. A read-only preflight
+/// rejects existing excess depth or access failures before any unlink. It is not
+/// a snapshot: later external changes or I/O failures can still leave a partly
+/// deleted record. Every removal repeats the depth and identity checks.
+fn walk_delete_tree(directory: &File, depth: usize, pass: DeletePass) -> std::io::Result<()> {
+    if depth > MAX_DELETE_DEPTH {
+        return Err(resource_limit(
+            "delete record",
+            "directory depth",
+            MAX_DELETE_DEPTH,
+        ));
+    }
     for leaf in directory_names(directory)? {
         let component =
             CString::new(leaf).expect("directory entries cannot contain an interior NUL");
@@ -1276,10 +1428,12 @@ fn remove_directory_contents(directory: &File) -> std::io::Result<()> {
                     "directory entry changed while deleting",
                 ));
             }
-            remove_directory_contents(&child)?;
+            walk_delete_tree(&child, depth + 1, pass)?;
             ensure_entry_identity(directory, &component, &child)?;
-            unlink_at(directory, &component, libc::AT_REMOVEDIR)?;
-        } else {
+            if pass == DeletePass::Remove {
+                unlink_opened_directory(directory, &component, &child)?;
+            }
+        } else if pass == DeletePass::Remove {
             // Symlinks, FIFOs and devices are unlinked as leaves and never opened.
             unlink_at(directory, &component, 0)?;
         }
@@ -1359,6 +1513,16 @@ fn corrupt(message: impl Into<String>) -> anyhow::Error {
     StorageError::Corrupt(message.into()).into()
 }
 
+/// Keep unsupported contract vocabulary distinct from contradictory supported facts.
+fn stored_contract_error(context: &str, error: ContractViolation) -> anyhow::Error {
+    let message = format!("{context}: {error}");
+    match error.kind {
+        StorageLoadFailureKind::Unsupported => unsupported(message),
+        StorageLoadFailureKind::Corrupt => corrupt(message),
+        StorageLoadFailureKind::Unavailable | StorageLoadFailureKind::Busy => unavailable(message),
+    }
+}
+
 fn unsupported(message: impl Into<String>) -> anyhow::Error {
     StorageError::Unsupported(message.into()).into()
 }
@@ -1391,6 +1555,10 @@ fn lock_error(source: std::io::Error) -> anyhow::Error {
     }
 }
 
+/// Preserve the typed storage cause through contextual application error wrappers.
+///
+/// An unknown failure defaults to unavailable, since absence of a recognized
+/// damage cause cannot justify classifying stored evidence as corrupt.
 fn storage_load_failure_kind(error: &anyhow::Error) -> StorageLoadFailureKind {
     error
         .chain()
@@ -1403,6 +1571,10 @@ fn storage_load_failure_kind(error: &anyhow::Error) -> StorageLoadFailureKind {
         })
 }
 
+/// Remove concrete I/O error types before diff consumes the load result.
+///
+/// Storage describes access/integrity failure; comparison owns how that failure
+/// affects report reliability and exit status. Neither is inferred from text.
 fn neutral_load_failure(error: anyhow::Error) -> StorageLoadFailure {
     StorageLoadFailure {
         kind: storage_load_failure_kind(&error),
@@ -1410,27 +1582,148 @@ fn neutral_load_failure(error: anyhow::Error) -> StorageLoadFailure {
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Exact serialized-byte fingerprint used by the structured finalization marker.
+///
+/// Hashing includes framing/newlines; it neither authenticates origin nor compares
+/// observed target files. Markers bind structured components; a bound raw manifest
+/// carries the separate normalization-stream receipt.
 struct FileCheck {
     bytes: u64,
     sha256: String,
 }
 #[derive(Serialize, Deserialize)]
+/// Last-published descriptor of finalized metadata/events, independent of capture outcome.
+///
+/// A marker can describe an interrupted or failed capture. Readers still check
+/// ID, bytes, event count and supported contracts; merely finding the file does
+/// not establish trusted storage or authorize promotion of a legacy record.
 struct Finalized {
     schema_version: u32,
     run_id: String,
     event_count: usize,
     events: FileCheck,
     metadata: FileCheck,
+    /// Present only in marker v2; binds the independently classified raw receipt.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    raw_manifest: Option<FileCheck>,
 }
 
+/// Decode a supported marker explicitly; never manufacture a replacement during a read.
 fn decode_finalized(data: &[u8]) -> Result<Finalized> {
+    if data.len() > MAX_MARKER_BYTES {
+        return Err(unavailable_io(
+            "finalized.json",
+            resource_limit("finalized.json", "bytes", MAX_MARKER_BYTES),
+        ));
+    }
+    check_json_budget(data, "finalized.json")
+        .map_err(|error| unavailable_io("finalized.json", error))?;
     let schema_version = decode_schema_header(data, "finalized.json")?;
-    if schema_version != 1 {
+    if !matches!(schema_version, 1 | 2) {
         return Err(unsupported(format!(
             "unsupported finalization marker schema {schema_version}"
         )));
     }
-    serde_json::from_slice(data).map_err(|error| corrupt(format!("finalized.json: {error}")))
+    let marker: Finalized = serde_json::from_slice(data)
+        .map_err(|error| corrupt(format!("finalized.json: {error}")))?;
+    if (schema_version == 2) != marker.raw_manifest.is_some() {
+        return Err(corrupt(
+            "finalization marker version contradicts raw manifest binding",
+        ));
+    }
+    Ok(marker)
+}
+
+/// Decode a bound receipt without asking a newer parser to reinterpret its raw bytes.
+fn decode_raw_manifest(data: &[u8]) -> Result<RawManifest> {
+    if data.len() > MAX_MARKER_BYTES {
+        return Err(unavailable_io(
+            "raw-integrity.json",
+            resource_limit("raw-integrity.json", "bytes", MAX_MARKER_BYTES),
+        ));
+    }
+    check_json_budget(data, "raw-integrity.json")
+        .map_err(|error| unavailable_io("raw-integrity.json", error))?;
+    let schema = decode_schema_header(data, "raw-integrity.json")?;
+    if schema != 1 {
+        return Err(unsupported(format!(
+            "unsupported raw manifest schema {schema}"
+        )));
+    }
+    let manifest: RawManifest = serde_json::from_slice(data)
+        .map_err(|error| corrupt(format!("raw-integrity.json: {error}")))?;
+    Ok(manifest)
+}
+
+/// Record raw verification as a separate fact; it cannot erase verified structured facts.
+///
+/// Reads stay beneath the held record/raw descriptors. Missing or mismatching
+/// promised evidence is corruption; permission/resource access is unavailable.
+/// An intentionally unverified receipt does not trigger speculative raw I/O.
+fn raw_integrity_at(directory: &File, manifest: RawManifest) -> RawIntegrity {
+    let result = verify_raw_receipt_at(directory, &manifest);
+    let (status, detail) = match result {
+        Ok(true) => ("verified", "saved raw bytes match the bound normalization-stream receipt; this does not authenticate origin or prove capture success".into()),
+        Ok(false) => {
+            let RawReceipt::Unverified { reason } = &manifest.receipt else { unreachable!() };
+            ("unverified", reason.clone())
+        }
+        Err(error) => (match storage_load_failure_kind(&error) {
+            StorageLoadFailureKind::Corrupt => "corrupt",
+            StorageLoadFailureKind::Unsupported => "unsupported",
+            StorageLoadFailureKind::Unavailable | StorageLoadFailureKind::Busy => "unavailable",
+        }, format!("{error:#}")),
+    };
+    RawIntegrity {
+        status: status.into(),
+        detail,
+        manifest: Some(manifest),
+    }
+}
+
+fn verify_raw_receipt_at(directory: &File, manifest: &RawManifest) -> Result<bool> {
+    let RawReceipt::Parsed {
+        bytes,
+        logical_lines,
+        sha256,
+    } = &manifest.receipt
+    else {
+        return Ok(false);
+    };
+    let raw_dir = openat_beneath(
+        directory,
+        c"raw",
+        libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC,
+        0,
+    )
+    .map_err(|error| required_record_file_error("raw directory", error))?;
+    let mut trace = open_required_record_file(&raw_dir, c"trace.log", "raw/trace.log")?;
+    let length =
+        stat_length(&file_stat(&trace).map_err(|error| unavailable_io("raw/trace.log", error))?)
+            .map_err(|error| unavailable_io("raw/trace.log", error))?;
+    if length != *bytes {
+        return Err(corrupt("raw/trace.log: byte count or SHA-256 mismatch"));
+    }
+    let (actual, lines) = calculate_file_check_with_lines(&mut trace, true)
+        .map_err(|error| unavailable_io("raw/trace.log", error))?;
+    if lines != *logical_lines {
+        return Err(corrupt(
+            "raw/trace.log: logical line count differs from normalization receipt",
+        ));
+    }
+    verify_check(
+        &actual,
+        &FileCheck {
+            bytes: *bytes,
+            sha256: sha256.clone(),
+        },
+        "raw/trace.log",
+    )?;
+    ensure_entry_identity(directory, c"raw", &raw_dir)
+        .map_err(|error| unavailable_io("raw directory changed while verifying", error))?;
+    ensure_entry_identity(&raw_dir, c"trace.log", &trace)
+        .map_err(|error| unavailable_io("raw trace changed while verifying", error))?;
+    Ok(true)
 }
 
 fn check(data: &[u8]) -> FileCheck {
@@ -1440,7 +1733,20 @@ fn check(data: &[u8]) -> FileCheck {
     }
 }
 
+/// Hash an opened regular inode with fixed-size scratch space and length rechecks.
+///
+/// These checks detect observed length changes but are not an OS snapshot or a
+/// lock against same-size concurrent writes. The caller must compare the digest
+/// against its marker/staged bytes before treating it as an integrity result.
 fn calculate_file_check(file: &mut File) -> std::io::Result<FileCheck> {
+    calculate_file_check_with_lines(file, false).map(|(check, _)| check)
+}
+
+/// Count raw framing during the checksum pass; this is not syscall parsing.
+fn calculate_file_check_with_lines(
+    file: &mut File,
+    count_lines: bool,
+) -> std::io::Result<(FileCheck, usize)> {
     let before = file_stat(file)?;
     if !is_regular(&before) {
         return Err(std::io::Error::new(
@@ -1452,6 +1758,8 @@ fn calculate_file_check(file: &mut File) -> std::io::Result<FileCheck> {
     file.seek(SeekFrom::Start(0))?;
     let mut hasher = Sha256::new();
     let mut bytes = 0u64;
+    let mut logical_lines = 0usize;
+    let mut last_byte = None;
     let mut buffer = [0u8; 64 * 1024];
     loop {
         let read = file.read(&mut buffer)?;
@@ -1460,6 +1768,14 @@ fn calculate_file_check(file: &mut File) -> std::io::Result<FileCheck> {
         }
         bytes = checked_byte_count(bytes, read)?;
         hasher.update(&buffer[..read]);
+        if count_lines {
+            logical_lines = logical_lines
+                .checked_add(buffer[..read].iter().filter(|&&byte| byte == b'\n').count())
+                .ok_or_else(|| {
+                    std::io::Error::other("raw trace logical line count exceeds usize")
+                })?;
+            last_byte = Some(buffer[read - 1]);
+        }
     }
     let after = file_stat(file)?;
     if !same_file(&before, &after)
@@ -1471,10 +1787,18 @@ fn calculate_file_check(file: &mut File) -> std::io::Result<FileCheck> {
             "regular file changed while checksumming",
         ));
     }
-    Ok(FileCheck {
-        bytes,
-        sha256: format!("{:x}", hasher.finalize()),
-    })
+    if count_lines && last_byte.is_some_and(|byte| byte != b'\n') {
+        logical_lines = logical_lines
+            .checked_add(1)
+            .ok_or_else(|| std::io::Error::other("raw trace logical line count exceeds usize"))?;
+    }
+    Ok((
+        FileCheck {
+            bytes,
+            sha256: format!("{:x}", hasher.finalize()),
+        },
+        logical_lines,
+    ))
 }
 
 fn checked_byte_count(current: u64, added: usize) -> std::io::Result<u64> {
@@ -1520,18 +1844,30 @@ fn rename_at(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Furthest publication stage observed when a single atomic replacement stops.
+///
+/// Visibility changes at rename; directory sync is a later operation. `Durable`
+/// records successful sync calls, not experimentally proven power-loss behavior.
 enum CommitStage {
+    /// The destination has not been replaced by this operation.
     BeforePublish,
+    /// Rename succeeded, but syncing the containing directory failed.
     PublishedDurabilityUnknown,
+    /// File and directory sync succeeded; later verification may still fail.
     Durable,
 }
 
 #[derive(Debug)]
+/// Preserve whether an I/O error happened before or after destination visibility.
+///
+/// A post-rename error is not a retry instruction: replacing again could hide a
+/// partially finalized record whose first publication already reached readers.
 struct CommitFailure {
     file: String,
     operation: &'static str,
     stage: CommitStage,
     source: std::io::Error,
+    cleanup: Option<CleanupFailure>,
 }
 
 impl std::fmt::Display for CommitFailure {
@@ -1552,7 +1888,11 @@ impl std::fmt::Display for CommitFailure {
                 "atomic replace of {} was durable but {} failed: {}",
                 self.file, self.operation, self.source
             ),
+        }?;
+        if let Some(cleanup) = &self.cleanup {
+            write!(f, "; additionally {cleanup}")?;
         }
+        Ok(())
     }
 }
 
@@ -1574,11 +1914,52 @@ impl CommitFailure {
             operation,
             stage,
             source,
+            cleanup: None,
         }
     }
 }
 
+#[derive(Debug)]
+/// A failed explicit cleanup attempt, separate from the operation's primary cause.
+///
+/// The name describes the attempted unpublished entry. It is not an assertion
+/// that the entry still exists: a later best-effort Drop retry may succeed.
+struct CleanupFailure {
+    temporary: String,
+    source: std::io::Error,
+}
+
+impl std::fmt::Display for CleanupFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "temporary cleanup failed for {:?}: {}",
+            self.temporary, self.source
+        )
+    }
+}
+
+#[derive(Debug)]
+/// Keep a non-I/O staging failure and its typed cause chain when abort also fails.
+struct StagingAbortFailure {
+    primary: anyhow::Error,
+    cleanup: CleanupFailure,
+}
+
+impl std::fmt::Display for StagingAbortFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}; additionally {}", self.primary, self.cleanup)
+    }
+}
+
+impl std::error::Error for StagingAbortFailure {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(self.primary.as_ref())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Deterministic failure checkpoints for the same publication path used in production.
 enum AtomicStep {
     Write,
     FileSync,
@@ -1591,6 +1972,10 @@ enum AtomicStep {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
+/// Explicit local fault-control seam; ordinary callers always pass the default.
+///
+/// No environment/global switch changes publication behavior. Tests can exercise
+/// stage and fallback outcomes without filling storage or guessing random names.
 struct AtomicControl {
     fail: Option<(&'static str, AtomicStep)>,
     force_named_fallback: bool,
@@ -1608,18 +1993,50 @@ impl AtomicControl {
     }
 }
 
+/// Own one temporary inode and, once materialized, its unpublished directory name.
+///
+/// The borrowed directory keeps cleanup anchored. `name = None` means there is
+/// no owned temporary entry to unlink, including after rename consumes that name.
+/// Explicit aborts retain cleanup failures alongside the primary error. Drop is
+/// a best-effort fallback for unwinding or an owner abandoned without an abort;
+/// it cannot report success or provide recovery when its cleanup fails.
 struct StagedFile<'a> {
     directory: &'a File,
     file: File,
     name: Option<CString>,
 }
 
+/// A surviving link means cleanup did not establish removal of the owned inode.
+///
+/// It can result from a late name swap or an external hard link. This detects an
+/// unsatisfied postcondition; it neither identifies which happened nor restores
+/// an entry already removed by unlink. Zero links is an observation, not durable
+/// exclusion of a same-UID writer or a proof of filesystem health.
+fn require_unlinked_staging_inode(links: libc::nlink_t) -> std::io::Result<()> {
+    if links == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "owned temporary inode remains linked after removal",
+        ))
+    }
+}
+
 impl StagedFile<'_> {
+    /// Remove this name only while it still identifies the owned staging inode.
+    ///
+    /// Absence needs no name removal. A replacement observed before unlink is
+    /// left untouched. A surviving owned-inode link after unlink is an error;
+    /// this cannot make check-and-unlink atomic or restore a removed replacement.
     fn cleanup(&mut self) -> std::io::Result<()> {
         let Some(name) = self.name.as_ref() else {
             return Ok(());
         };
-        match unlink_at(self.directory, name, 0) {
+        let removal = ensure_entry_identity(self.directory, name, &self.file)
+            .and_then(|()| unlink_at(self.directory, name, 0))
+            .and_then(|()| require_unlinked_staging_inode(file_stat(&self.file)?.st_nlink));
+        match removal {
             Ok(()) => {
                 self.name = None;
                 Ok(())
@@ -1631,6 +2048,30 @@ impl StagedFile<'_> {
             Err(error) => Err(error),
         }
     }
+
+    /// Diagnose an abort while this owner still knows the exact temporary entry.
+    ///
+    /// Only one named staging inode is owned at a time. Anonymous-to-named
+    /// fallback leaves the old source anonymous, so an outer abort cannot lose
+    /// a second named cleanup failure from the fallback owner.
+    fn cleanup_failure(&mut self) -> Option<CleanupFailure> {
+        let temporary = self.name.as_ref()?.to_string_lossy().into_owned();
+        self.cleanup()
+            .err()
+            .map(|source| CleanupFailure { temporary, source })
+    }
+
+    fn abort_commit(&mut self, mut primary: CommitFailure) -> CommitFailure {
+        primary.cleanup = self.cleanup_failure().or(primary.cleanup);
+        primary
+    }
+
+    fn abort(&mut self, primary: anyhow::Error) -> anyhow::Error {
+        match self.cleanup_failure() {
+            Some(cleanup) => StagingAbortFailure { primary, cleanup }.into(),
+            None => primary,
+        }
+    }
 }
 
 impl Drop for StagedFile<'_> {
@@ -1639,6 +2080,11 @@ impl Drop for StagedFile<'_> {
     }
 }
 
+/// Generate an unpredictable temporary component without reusing a fixed `.tmp` path.
+///
+/// Randomness reduces collisions; exclusive creation/linking establishes actual
+/// ownership. Failure to obtain random bytes is an error, not permission to use
+/// a predictable alternative that might name someone else's existing inode.
 fn random_staging_name() -> std::io::Result<CString> {
     let mut random = [0u8; 16];
     let mut filled = 0;
@@ -1699,6 +2145,7 @@ fn tmpfile_link_is_unsupported(error: &std::io::Error) -> bool {
         )
 }
 
+/// Allocate a fresh O_EXCL temporary inode, retrying only random-name collisions.
 fn create_named_staging(directory: &File) -> std::io::Result<StagedFile<'_>> {
     for _ in 0..32 {
         let name = random_staging_name()?;
@@ -1725,6 +2172,11 @@ fn create_named_staging(directory: &File) -> std::io::Result<StagedFile<'_>> {
     ))
 }
 
+/// Prefer an unnamed inode; fall back only for recognized unsupported O_TMPFILE cases.
+///
+/// Permission, missing-directory and other I/O failures remain errors rather than
+/// being hidden by an alternate writer path. Neither path modifies a preexisting
+/// fixed temporary leaf.
 fn create_staging(directory: &File, force_named: bool) -> std::io::Result<StagedFile<'_>> {
     if !force_named {
         match openat_basic(
@@ -1747,6 +2199,7 @@ fn create_staging(directory: &File, force_named: bool) -> std::io::Result<Staged
     create_named_staging(directory)
 }
 
+/// Give an already written anonymous inode a fresh name needed for atomic rename.
 fn link_anonymous_staging(staged: &mut StagedFile<'_>) -> std::io::Result<()> {
     debug_assert!(staged.name.is_none());
     for _ in 0..32 {
@@ -1777,6 +2230,7 @@ fn link_anonymous_staging(staged: &mut StagedFile<'_>) -> std::io::Result<()> {
     ))
 }
 
+/// Reject a detected temporary-name swap before renaming that leaf into the destination.
 fn verify_staging_identity(staged: &StagedFile<'_>) -> std::io::Result<()> {
     let name = staged.name.as_ref().ok_or_else(|| {
         std::io::Error::new(
@@ -1818,6 +2272,10 @@ fn ordinary_component(name: &str) -> std::io::Result<CString> {
     Ok(name)
 }
 
+/// Single-use staging authority for one predetermined destination component.
+///
+/// The destination is separate from the temporary name: cleanup must never treat
+/// a successfully published record file as an unpublished temporary file.
 struct AtomicStaging<'a> {
     staged: StagedFile<'a>,
     published: CString,
@@ -1825,11 +2283,13 @@ struct AtomicStaging<'a> {
     control: AtomicControl,
 }
 
+/// Retain the published inode for post-rename identity and byte verification.
 struct PublishedFile {
     file: File,
     stage: CommitStage,
 }
 
+/// Allocate and validate write authority before any destination replacement.
 fn begin_atomic_replace_with_control<'a>(
     directory: &'a File,
     name: &'static str,
@@ -1843,7 +2303,7 @@ fn begin_atomic_replace_with_control<'a>(
             error,
         )
     })?;
-    let staged = create_staging(directory, control.force_named_fallback).map_err(|error| {
+    let mut staged = create_staging(directory, control.force_named_fallback).map_err(|error| {
         CommitFailure::new(
             name,
             "create temporary file",
@@ -1852,12 +2312,12 @@ fn begin_atomic_replace_with_control<'a>(
         )
     })?;
     control.check(name, AtomicStep::Write).map_err(|error| {
-        CommitFailure::new(
+        staged.abort_commit(CommitFailure::new(
             name,
             "write temporary file",
             CommitStage::BeforePublish,
             error,
-        )
+        ))
     })?;
     Ok(AtomicStaging {
         staged,
@@ -1867,6 +2327,7 @@ fn begin_atomic_replace_with_control<'a>(
     })
 }
 
+/// Copy a fresh staging inode using bounded scratch space, not a total-byte quota.
 fn copy_file_bounded(source: &mut File, destination: &mut File) -> std::io::Result<()> {
     source.seek(SeekFrom::Start(0))?;
     destination.seek(SeekFrom::Start(0))?;
@@ -1880,6 +2341,10 @@ fn copy_file_bounded(source: &mut File, destination: &mut File) -> std::io::Resu
     }
 }
 
+/// Recover from unsupported anonymous linking while still before publication.
+///
+/// Only newly owned temporary inodes participate. The copied fallback must be
+/// synced separately; syncing the source does not persist the copied destination.
 fn copy_anonymous_to_named<'a>(
     source: &mut StagedFile<'a>,
     display: &'static str,
@@ -1897,23 +2362,23 @@ fn copy_anonymous_to_named<'a>(
         .check(display, AtomicStep::FallbackCopy)
         .and_then(|()| copy_file_bounded(&mut source.file, &mut named.file))
         .map_err(|error| {
-            CommitFailure::new(
+            named.abort_commit(CommitFailure::new(
                 display,
                 "copy anonymous temporary file to named fallback",
                 CommitStage::BeforePublish,
                 error,
-            )
+            ))
         })?;
     control
         .check(display, AtomicStep::FallbackFileSync)
         .and_then(|()| named.file.sync_all())
         .map_err(|error| {
-            CommitFailure::new(
+            named.abort_commit(CommitFailure::new(
                 display,
                 "sync named fallback temporary file",
                 CommitStage::BeforePublish,
                 error,
-            )
+            ))
         })?;
     Ok(named)
 }
@@ -1921,16 +2386,27 @@ fn copy_anonymous_to_named<'a>(
 impl AtomicStaging<'_> {
     fn write_all(&mut self, data: &[u8]) -> std::result::Result<(), CommitFailure> {
         self.staged.file.write_all(data).map_err(|error| {
-            CommitFailure::new(
+            self.staged.abort_commit(CommitFailure::new(
                 self.display,
                 "write temporary file",
                 CommitStage::BeforePublish,
                 error,
-            )
+            ))
         })
     }
 
+    /// Consume staging authority through file sync, name/identity checks, rename and directory sync.
+    ///
+    /// 中文阅读提示：rename 是可见性边界；之后目录 sync 失败不能说成“尚未写入”。
+    /// retained fd 用于提交后复核，不能只凭它仍可读就认定目标名字仍指向同一 inode。
     fn publish(mut self) -> std::result::Result<PublishedFile, CommitFailure> {
+        self.publish_inner()
+            .map_err(|error| self.staged.abort_commit(error))
+    }
+
+    /// Publication clears the temporary name at rename, before any later error.
+    /// The outer abort therefore cannot unlink an already published destination.
+    fn publish_inner(&mut self) -> std::result::Result<PublishedFile, CommitFailure> {
         self.control
             .check(self.display, AtomicStep::FileSync)
             .and_then(|()| self.staged.file.sync_all())
@@ -2037,11 +2513,16 @@ impl AtomicStaging<'_> {
 }
 
 #[derive(Debug)]
+/// Byte fingerprint and limited contract facts measured from one event stream.
 struct EventFileSummary {
     check: FileCheck,
     facts: EventFacts,
 }
 
+/// Serialize/hash events incrementally while retaining one atomic publish authority.
+///
+/// This avoids a second whole JSONL buffer; the caller's event slice still exists,
+/// and each serialized line must fit the same budget enforced by readers.
 struct EventJsonlStaging<'a> {
     atomic: AtomicStaging<'a>,
     hasher: Sha256,
@@ -2060,12 +2541,30 @@ impl<'a> EventJsonlStaging<'a> {
     }
 
     fn push(&mut self, event: &Event) -> Result<()> {
-        // Serialize one DTO at a time: memory is bounded by the largest event,
-        // while the wire bytes remain exactly the historical compact JSONL.
-        let mut line = serde_json::to_vec(event)?;
-        line.push(b'\n');
+        self.push_inner(event)
+            .map_err(|error| self.atomic.staged.abort(error))
+    }
+
+    /// Keep bounded serialization and byte/fact updates separate from abort.
+    /// Failed serialization never advances the staged summary or publishes it.
+    fn push_inner(&mut self, event: &Event) -> Result<()> {
+        let mut line =
+            serialize_bounded(event, MAX_EVENT_LINE_BYTES - 1, "events.jsonl line", false)?;
+        append_bounded(&mut line, b"\n", MAX_EVENT_LINE_BYTES, "events.jsonl line")
+            .map_err(|error| unavailable_io("events.jsonl", error))?;
+        let bytes = checked_byte_count(self.bytes, line.len())?;
+        if bytes > MAX_EVENT_FILE_BYTES || self.facts.count() >= MAX_EVENT_COUNT {
+            return Err(unavailable_io(
+                "events.jsonl",
+                resource_limit(
+                    "events.jsonl",
+                    "bytes/events",
+                    format!("{MAX_EVENT_FILE_BYTES}/{MAX_EVENT_COUNT}"),
+                ),
+            ));
+        }
         self.atomic.write_all(&line)?;
-        self.bytes = checked_byte_count(self.bytes, line.len())?;
+        self.bytes = bytes;
         self.hasher.update(&line);
         self.facts.observe(event);
         Ok(())
@@ -2102,21 +2601,33 @@ fn atomic_replace(
     atomic_replace_with_control(directory, name, data, AtomicControl::default())
 }
 
+/// Check metadata facts and atomically replace its bytes, without deciding finalization.
 fn metadata_at(directory: &File, metadata: &Metadata) -> Result<()> {
     validate_metadata_contract(metadata)
-        .map_err(|error| anyhow::anyhow!("invalid metadata contract: {error}"))?;
+        .map_err(|error| stored_contract_error("invalid metadata contract", error))?;
     atomic_replace(
         directory,
         "metadata.json",
-        &serde_json::to_vec_pretty(metadata)?,
+        &serialize_bounded(metadata, MAX_METADATA_BYTES, "metadata.json", true)?,
     )?;
     Ok(())
 }
 
+/// Decode one explicitly supported event schema; preserve saved coordinates verbatim.
+///
+/// Bounded DTO decoding precedes the versioned model shape check in [`EventFacts`].
+/// Older metadata never inherits current shape requirements on a compatibility read.
 fn decode_event_line(line: &[u8], line_number: usize) -> Result<Event> {
     let display = format!("events.jsonl:{line_number}");
+    if line.len() >= MAX_EVENT_LINE_BYTES {
+        return Err(unavailable_io(
+            &display,
+            resource_limit(&display, "line bytes including LF", MAX_EVENT_LINE_BYTES),
+        ));
+    }
+    check_json_budget(line, &display).map_err(|error| unavailable_io(&display, error))?;
     let schema_version = decode_schema_header(line, &display)?;
-    if !matches!(schema_version, 1 | 2) {
+    if !matches!(schema_version, 1..=3) {
         return Err(unsupported(format!(
             "unsupported event schema {schema_version} at line {line_number}"
         )));
@@ -2138,22 +2649,35 @@ fn decode_events(data: &[u8]) -> Result<Vec<Event>> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Share decoding/integrity checks while choosing whether to retain event DTOs.
 enum EventReadMode {
     CollectEvents,
     ValidateOnly,
 }
 
 #[derive(Debug)]
+/// Successful decode facts plus optional materialization for show/diff callers.
 struct DecodedEventStream {
     facts: EventFacts,
     events: Option<Vec<Event>>,
 }
 
+/// Keep byte verification available even when interpreting those bytes failed.
+///
+/// Separating the two results lets marker corruption outrank a misleading
+/// unsupported-schema/JSON error found inside bytes that do not match the marker.
 struct EventStreamReadback {
     check: FileCheck,
     decoded: Result<DecodedEventStream>,
 }
 
+/// Hash every JSONL byte while collecting supported DTO facts or validate-only summaries.
+///
+/// UTF-8, termination and decode errors are deferred until the checksum is known.
+/// After a decode failure the partial event vector is discarded, but the remaining
+/// bytes are still hashed. An actual read/fstat error instead returns immediately.
+/// Byte, line, JSON-value and event-count budgets apply before DTO growth;
+/// collect-mode Vec capacity is reserved fallibly. Resource failure is unavailable.
 fn stream_events(file: &mut File, mode: EventReadMode) -> std::io::Result<EventStreamReadback> {
     let before = file_stat(file)?;
     if !is_regular(&before) {
@@ -2163,6 +2687,13 @@ fn stream_events(file: &mut File, mode: EventReadMode) -> std::io::Result<EventS
         ));
     }
     let expected_length = stat_length(&before)?;
+    if expected_length > MAX_EVENT_FILE_BYTES {
+        return Err(resource_limit(
+            "events.jsonl",
+            "bytes",
+            MAX_EVENT_FILE_BYTES,
+        ));
+    }
     file.seek(SeekFrom::Start(0))?;
     let mut reader = BufReader::with_capacity(64 * 1024, file);
     let mut buffer = Vec::new();
@@ -2180,13 +2711,22 @@ fn stream_events(file: &mut File, mode: EventReadMode) -> std::io::Result<EventS
     };
 
     loop {
-        buffer.clear();
-        if reader.read_until(b'\n', &mut buffer)? == 0 {
+        if read_bounded_line(&mut reader, &mut buffer, MAX_EVENT_LINE_BYTES)? == 0 {
             break;
         }
         saw_bytes = true;
         line_number += 1;
+        if line_number > MAX_EVENT_COUNT {
+            return Err(resource_limit("events.jsonl", "events", MAX_EVENT_COUNT));
+        }
         bytes = checked_byte_count(bytes, buffer.len())?;
+        if bytes > MAX_EVENT_FILE_BYTES {
+            return Err(resource_limit(
+                "events.jsonl",
+                "bytes",
+                MAX_EVENT_FILE_BYTES,
+            ));
+        }
         hasher.update(&buffer);
         final_line_terminated = buffer.ends_with(b"\n");
 
@@ -2211,8 +2751,22 @@ fn stream_events(file: &mut File, mode: EventReadMode) -> std::io::Result<EventS
             Ok(event) => {
                 facts.observe(&event);
                 if let Some(events) = events.as_mut() {
+                    reserve_bounded(
+                        events,
+                        events.len() + 1,
+                        MAX_EVENT_COUNT,
+                        "events.jsonl events",
+                    )?;
                     events.push(event);
                 }
+            }
+            // A decoder resource failure is not another malformed line to
+            // defer: keeping an earlier JSON/schema error would mislabel the
+            // operation's inability to allocate/interpret the bounded DTO.
+            Err(error)
+                if storage_load_failure_kind(&error) == StorageLoadFailureKind::Unavailable =>
+            {
+                return Err(std::io::Error::other(error));
             }
             Err(error) if first_decode_error.is_none() => {
                 first_decode_error = Some(error);
@@ -2251,11 +2805,16 @@ fn stream_events(file: &mut File, mode: EventReadMode) -> std::io::Result<EventS
     })
 }
 
+/// Verify publication facts without allocating another complete event vector.
 fn stream_event_readback(file: &mut File) -> std::io::Result<EventStreamReadback> {
     stream_events(file, EventReadMode::ValidateOnly)
 }
 
 #[derive(Debug)]
+/// Versions and aggregate event facts used to reject unsupported current tuples.
+///
+/// Legacy readable combinations remain legacy: accepting their formats does not
+/// strengthen their saved completeness or promote their integrity classification.
 struct SchemaTuple {
     metadata: u32,
     events: EventFacts,
@@ -2272,26 +2831,42 @@ impl SchemaTuple {
     }
 }
 
+/// Apply supported version boundaries without silently mixing protocol tuples.
 fn validate_schema_tuple(tuple: &SchemaTuple) -> Result<()> {
-    if !matches!(tuple.metadata, 1..=3) {
+    if !matches!(tuple.metadata, 1..=4) {
         return Err(unsupported(format!(
             "unsupported metadata schema {}",
             tuple.metadata
         )));
     }
     if let Some(marker) = tuple.marker
-        && marker != 1
+        && !matches!(marker, 1 | 2)
     {
         return Err(unsupported(format!(
             "unsupported finalization marker schema {marker}"
         )));
     }
-    if let Some(version) = tuple.events.first_unsupported_schema {
+    if let Some(version) = tuple.events.first_unsupported_schema() {
         return Err(unsupported(format!("unsupported event schema {version}")));
     }
-    if tuple.metadata == 3 && tuple.events.has_non_v2 {
+    if tuple.metadata == 3 && tuple.events.has_non_v2() {
         return Err(corrupt(
             "current metadata schema requires only event schema 2",
+        ));
+    }
+    if tuple.metadata == 4 && tuple.events.has_non_v3() {
+        return Err(corrupt("trace-v1 metadata requires only event schema 3"));
+    }
+    if tuple.metadata <= 3 && tuple.events.has_v3() {
+        return Err(corrupt(
+            "legacy metadata cannot adopt trace-v1 event schema 3",
+        ));
+    }
+    if let Some(marker) = tuple.marker
+        && ((tuple.metadata == 4) != (marker == 2))
+    {
+        return Err(corrupt(
+            "metadata and finalization marker versions contradict",
         ));
     }
     Ok(())
@@ -2302,11 +2877,34 @@ fn finalized_integrity(metadata_schema: u32, events: &[Event]) -> Result<Storage
     finalized_integrity_from_facts(metadata_schema, EventFacts::from_events(events))
 }
 
+/// Classify already checked marker bytes without giving legacy metadata new trust.
+///
+/// This helper checks tuple compatibility; its callers perform the byte/count
+/// verification. It does not inspect raw evidence or determine capture reliability.
+#[cfg(test)]
 fn finalized_integrity_from_facts(
     metadata_schema: u32,
     events: EventFacts,
 ) -> Result<StorageIntegrity> {
-    validate_schema_tuple(&SchemaTuple::finalized(metadata_schema, events, 1))?;
+    finalized_integrity_with_marker(metadata_schema, events, 1)
+}
+
+fn finalized_integrity_with_marker(
+    metadata_schema: u32,
+    events: EventFacts,
+    marker_schema: u32,
+) -> Result<StorageIntegrity> {
+    validate_schema_tuple(&SchemaTuple::finalized(
+        metadata_schema,
+        events,
+        marker_schema,
+    ))?;
+    if metadata_schema == 4 {
+        return Ok(StorageIntegrity {
+            status: "verified".into(),
+            detail: "metadata, events and raw manifest match finalized byte counts, event count and SHA-256; raw integrity is classified separately".into(),
+        });
+    }
     if metadata_schema == 3 {
         return Ok(StorageIntegrity {
             status: "verified".into(),
@@ -2321,18 +2919,23 @@ fn finalized_integrity_from_facts(
 }
 
 /// Final marker is the last atomic write; it describes storage finalization, not capture success.
-/// Legacy path finalizer retained until the RF-630 cleanup pass.
-#[allow(dead_code)]
+/// Test compatibility finalizer for the legacy path-based oracle.
+#[cfg(test)]
 fn finish(dir: &Path, m: &Metadata, events: &[Event]) -> Result<()> {
     let directory =
         open_directory(dir).map_err(|error| unavailable_io("open record directory", error))?;
     finish_at(&directory, m, events)
 }
 
+#[cfg(test)]
 fn finish_at(directory: &File, m: &Metadata, events: &[Event]) -> Result<()> {
     finish_at_with_control(directory, m, events, AtomicControl::default())
 }
 
+/// Reopen a published metadata leaf and compare its bytes with the serialized input.
+///
+/// The supplied stage preserves whether a read-back failure followed a completed
+/// rename/sync; equality of bytes here is not a new claim about target behavior.
 fn read_back_exact(
     directory: &File,
     name: &'static str,
@@ -2344,7 +2947,7 @@ fn read_back_exact(
     control
         .check(name, AtomicStep::ReadBack)
         .map_err(|error| CommitFailure::new(name, "read back published file", stage, error))?;
-    let actual = read_file_at(directory, component)
+    let actual = read_file_at(directory, component, MAX_METADATA_BYTES)
         .map_err(|error| CommitFailure::new(name, "read back published file", stage, error))?;
     if actual != expected {
         return Err(CommitFailure::new(
@@ -2360,6 +2963,11 @@ fn read_back_exact(
     Ok(actual)
 }
 
+/// Bind the published event name back to its retained inode and measured stream facts.
+///
+/// Both name identity and byte/fact agreement matter: the retained fd alone could
+/// keep reading the old inode after an external process replaced the visible leaf.
+/// This verification still has the semantic limits of [`EventFacts`].
 fn read_back_published_events(
     directory: &File,
     published: &PublishedFile,
@@ -2474,17 +3082,58 @@ fn read_back_published_events(
     })
 }
 
+/// Compatibility/test entry point for the default structured-only protocol.
+#[cfg(test)]
 fn finish_at_with_control(
     directory: &File,
     m: &Metadata,
     events: &[Event],
     control: AtomicControl,
 ) -> Result<()> {
-    if m.schema_version != 3 || events.iter().any(|event| event.schema_version != 2) {
-        bail!("writer requires metadata schema 3 and event schema 2");
+    finish_at_with_manifest_control(directory, m, events, None, control)
+}
+
+/// Publish events -> metadata -> optional raw receipt -> marker, preserving failure stages.
+///
+/// 中文阅读提示：先验证合同和实际消费的 raw 收据，再发布并复读结构化文件；trace-v1
+/// 还发布并复读 manifest，复核 raw 字节之后最后写 marker。前序失败不合成 marker，
+/// 不回滚已公开文件；marker 发布错误也保留阶段，不能解释为整个记录从未可见。
+/// 这不是防外部同权限修改的事务，不证明采集成功、来源认证或断电恢复。
+fn finish_at_with_manifest_control(
+    directory: &File,
+    m: &Metadata,
+    events: &[Event],
+    manifest: Option<&RawManifest>,
+    control: AtomicControl,
+) -> Result<()> {
+    let valid_tuple = match m.schema_version {
+        3 => manifest.is_none() && events.iter().all(|event| event.schema_version == 2),
+        4 => manifest.is_some() && events.iter().all(|event| event.schema_version == 3),
+        _ => false,
+    };
+    if !valid_tuple {
+        bail!(
+            "writer requires metadata/events/marker tuple 3/2/1 or trace-v1 tuple 4/3/2 with a raw manifest"
+        );
+    }
+    if events.len() > MAX_EVENT_COUNT {
+        return Err(unavailable_io(
+            "events.jsonl",
+            resource_limit("events.jsonl", "events", MAX_EVENT_COUNT),
+        ));
     }
     validate_run_contract(m, events, true)
-        .map_err(|error| anyhow::anyhow!("cannot finalize inconsistent metadata: {error}"))?;
+        .map_err(|error| stored_contract_error("cannot finalize inconsistent metadata", error))?;
+    // Reject an unwritable metadata budget before even publishing the event leaf.
+    let metadata_bytes = serialize_bounded(m, MAX_METADATA_BYTES, "metadata.json", true)?;
+    let manifest_bytes = manifest
+        .map(|manifest| {
+            crate::model::validate_raw_manifest(manifest, m)
+                .map_err(|error| stored_contract_error("raw manifest contract", error))?;
+            verify_raw_receipt_at(directory, manifest)?;
+            serialize_bounded(manifest, MAX_MARKER_BYTES, "raw-integrity.json", true)
+        })
+        .transpose()?;
     let mut event_staging = EventJsonlStaging::begin(directory, control)?;
     for event in events {
         event_staging.push(event)?;
@@ -2493,8 +3142,8 @@ fn finish_at_with_control(
     let reread_events =
         read_back_published_events(directory, &published_events, &staged_events, control)?;
     validate_run_contract_facts(m, &reread_events.facts, true)
-        .map_err(|error| anyhow::anyhow!("cannot finalize inconsistent metadata: {error}"))?;
-    if reread_events.facts.count != m.parsed_events {
+        .map_err(|error| stored_contract_error("cannot finalize inconsistent metadata", error))?;
+    if reread_events.facts.count() != m.parsed_events {
         return Err(CommitFailure::new(
             "events.jsonl",
             "verify read-back event count",
@@ -2506,7 +3155,6 @@ fn finish_at_with_control(
         )
         .into());
     }
-    let metadata_bytes = serde_json::to_vec_pretty(m)?;
     let metadata_stage =
         atomic_replace_with_control(directory, "metadata.json", &metadata_bytes, control)?;
     let meta = read_back_exact(
@@ -2517,17 +3165,41 @@ fn finish_at_with_control(
         metadata_stage,
         control,
     )?;
+    let raw_manifest_check = match (manifest, manifest_bytes) {
+        (Some(manifest), Some(bytes)) => {
+            let stage =
+                atomic_replace_with_control(directory, "raw-integrity.json", &bytes, control)?;
+            let actual = read_back_exact(
+                directory,
+                "raw-integrity.json",
+                c"raw-integrity.json",
+                &bytes,
+                stage,
+                control,
+            )?;
+            // Verify the saved raw leaf once more after structured publication.
+            // This compares with the consumption digest, never updates it.
+            control
+                .check("raw/trace.log", AtomicStep::ReadBack)
+                .map_err(|error| unavailable_io("verify raw before final marker", error))?;
+            verify_raw_receipt_at(directory, manifest)?;
+            Some(check(&actual))
+        }
+        (None, None) => None,
+        _ => unreachable!("manifest bytes follow the validated tuple"),
+    };
     let marker = Finalized {
-        schema_version: 1,
+        schema_version: if m.schema_version == 4 { 2 } else { 1 },
         run_id: m.id.clone(),
-        event_count: reread_events.facts.count,
+        event_count: reread_events.facts.count(),
         events: reread_events.check,
         metadata: check(&meta),
+        raw_manifest: raw_manifest_check,
     };
     atomic_replace_with_control(
         directory,
         "finalized.json",
-        &serde_json::to_vec_pretty(&marker)?,
+        &serialize_bounded(&marker, MAX_MARKER_BYTES, "finalized.json", true)?,
         control,
     )?;
     Ok(())
@@ -2550,9 +3222,15 @@ impl StorageRoot {
 
     /// List record facts while isolating damage to the affected row.
     ///
-    /// Event files are streamed in validate-only mode: checksums, schemas,
-    /// counts, and cross-file contracts are checked without retaining a
-    /// `Vec<Event>` for each listed record.
+    /// Older tuples stream checksums, schemas, counts and cross-file facts in
+    /// validate-only mode. The trace-v1 marker-v2 path temporarily collects one
+    /// record's events for the same pure generation/provenance validation used
+    /// by full loads. Summary construction discards that vector; returned rows
+    /// retain metadata/component facts, never events. Existing per-record
+    /// resource budgets apply, but do not guarantee recovery from arbitrary
+    /// allocation failure; index and summary totals still grow with record count.
+    /// Returned per-entry load errors become unreadable rows; inability to enumerate the index
+    /// remains an operation error because the omitted entries cannot be known.
     fn records(&self) -> Result<Vec<RecordSummary>> {
         let mut records = Vec::new();
         self.scan(|e| {
@@ -2576,6 +3254,7 @@ impl StorageRoot {
                     metadata: Box::new(record.metadata),
                     directory,
                     storage_integrity: record.storage_integrity,
+                    raw_integrity: record.raw_integrity,
                 },
                 Err(error) => RecordSummary::Unreadable {
                     id,
@@ -2617,18 +3296,22 @@ pub(crate) fn load_outcome(root: &Path, key: &str) -> LoadOutcome<Run> {
     }
 }
 
-/// A damaged row never prevents listing another row. Preserve the flat metadata
-/// fields for readable records; unreadable rows expose only index hints/status.
+/// Isolate returned per-record load errors from other listing rows. Preserve flat
+/// metadata fields for readable records; unreadable rows expose only hints/status.
+/// Root/index enumeration errors still fail the operation rather than returning
+/// a misleading partial inventory. No row is repaired or deleted while listing.
 pub(crate) fn records(root: &Path) -> Result<Vec<RecordSummary>> {
     let Some(storage) = open_existing(root)? else {
         return Ok(vec![]);
     };
     storage.records()
 }
+/// Internal load result shared by full materialization and validate-only listing.
 struct LoadedRecord {
     metadata: Metadata,
     events: Option<Vec<Event>>,
     storage_integrity: StorageIntegrity,
+    raw_integrity: Option<RawIntegrity>,
 }
 
 fn empty_events(mode: EventReadMode) -> Option<Vec<Event>> {
@@ -2638,8 +3321,16 @@ fn empty_events(mode: EventReadMode) -> Option<Vec<Event>> {
     }
 }
 
+/// Load one anchored entry with marker/byte errors preceding DTO interpretation.
+///
+/// A present marker is decoded first, then every bound structured file must match it
+/// before their schemas are interpreted. Without a marker, current/running records
+/// expose no events and remain unfinalized; non-running legacy records may be read
+/// but remain unverified. Trace-v1 independently checks its saved raw receipt;
+/// older tuples never inspect raw or optional sidecars. No branch reparses raw,
+/// writes a marker or repairs data. Buffers/events obey the shared resource policy.
 fn read_record_at(directory: &File, id: &str, mode: EventReadMode) -> Result<LoadedRecord> {
-    let marker = match read_file_at(directory, c"finalized.json") {
+    let marker = match read_file_at(directory, c"finalized.json", MAX_MARKER_BYTES) {
         Ok(data) => Some(decode_finalized(&data)?),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
         Err(e) => return Err(unavailable_io("finalized.json", e)),
@@ -2654,30 +3345,68 @@ fn read_record_at(directory: &File, id: &str, mode: EventReadMode) -> Result<Loa
         let mut events_file =
             open_required_record_file(directory, c"events.jsonl", "events.jsonl")?;
         verified_file_check(&mut events_file, &marker.events, "events.jsonl")?;
+        let manifest_bytes = match &marker.raw_manifest {
+            Some(expected) => {
+                let mut file = open_required_record_file(
+                    directory,
+                    c"raw-integrity.json",
+                    "raw-integrity.json",
+                )?;
+                verified_file_check(&mut file, expected, "raw-integrity.json")?;
+                let bytes = read_open_file(&mut file, "raw-integrity.json")?;
+                verify(&bytes, expected, "raw-integrity.json")?;
+                Some(bytes)
+            }
+            None => None,
+        };
 
-        // Both finalized files have passed their marker checks before either
+        // All bound files have passed their marker checks before any
         // schema/DTO is interpreted. Rechecking metadata bytes protects that
         // priority if the inode changes in place between verification and use.
         let metadata_bytes = read_open_file(&mut metadata_file, "metadata.json")?;
         verify(&metadata_bytes, &marker.metadata, "metadata.json")?;
         let metadata = decode_metadata(&metadata_bytes, &marker.run_id)?;
-        let streamed = stream_events(&mut events_file, mode)
+        // Trace-v1 provenance identifies a concrete normalized event. Retain its
+        // bounded DTO stream even for listing to apply the same pure validator;
+        // older tuples keep their original validate-only memory behavior.
+        let effective_mode = if marker.schema_version == 2 {
+            EventReadMode::CollectEvents
+        } else {
+            mode
+        };
+        let streamed = stream_events(&mut events_file, effective_mode)
             .map_err(|error| unavailable_io("events.jsonl", error))?;
         verify_check(&streamed.check, &marker.events, "events.jsonl")?;
         let decoded = streamed.decoded?;
-        if decoded.facts.count != marker.event_count
-            || decoded.facts.count != metadata.parsed_events
+        if decoded.facts.count() != marker.event_count
+            || decoded.facts.count() != metadata.parsed_events
         {
             return Err(corrupt("event count mismatch"));
         }
         validate_run_contract_facts(&metadata, &decoded.facts, true)
-            .map_err(|error| corrupt(format!("run contract: {error}")))?;
-        let storage_integrity =
-            finalized_integrity_from_facts(metadata.schema_version, decoded.facts)?;
+            .map_err(|error| stored_contract_error("run contract", error))?;
+        if metadata.schema_version == 4 {
+            validate_run_contract(&metadata, decoded.events.as_deref().unwrap_or(&[]), true)
+                .map_err(|error| stored_contract_error("run contract", error))?;
+        }
+        let storage_integrity = finalized_integrity_with_marker(
+            metadata.schema_version,
+            decoded.facts,
+            marker.schema_version,
+        )?;
+        let raw_integrity = manifest_bytes
+            .map(|bytes| {
+                let manifest = decode_raw_manifest(&bytes)?;
+                crate::model::validate_raw_manifest(&manifest, &metadata)
+                    .map_err(|error| stored_contract_error("raw manifest contract", error))?;
+                Ok::<_, anyhow::Error>(raw_integrity_at(directory, manifest))
+            })
+            .transpose()?;
         return Ok(LoadedRecord {
             metadata,
             events: decoded.events,
             storage_integrity,
+            raw_integrity,
         });
     }
 
@@ -2687,6 +3416,11 @@ fn read_record_at(directory: &File, id: &str, mode: EventReadMode) -> Result<Loa
     let metadata = decode_metadata(&metadata_bytes, id)?;
     if metadata.schema_version >= 3 || metadata.state == "running" {
         return Ok(LoadedRecord {
+            raw_integrity: (metadata.schema_version == 4).then(|| RawIntegrity {
+                status: "unverified".into(),
+                detail: "no bound final marker; raw normalization-stream receipt is unverified".into(),
+                manifest: None,
+            }),
             metadata,
             events: empty_events(mode),
             storage_integrity: StorageIntegrity {
@@ -2701,7 +3435,7 @@ fn read_record_at(directory: &File, id: &str, mode: EventReadMode) -> Result<Loa
         .map_err(|error| unavailable_io("events.jsonl", error))?;
     let decoded = streamed.decoded?;
     validate_run_contract_facts(&metadata, &decoded.facts, false)
-        .map_err(|error| corrupt(format!("run contract: {error}")))?;
+        .map_err(|error| stored_contract_error("run contract", error))?;
     Ok(LoadedRecord {
         metadata,
         events: decoded.events,
@@ -2710,9 +3444,11 @@ fn read_record_at(directory: &File, id: &str, mode: EventReadMode) -> Result<Loa
             detail: "storage integrity unverified: legacy record has no finalization checksums"
                 .into(),
         },
+        raw_integrity: None,
     })
 }
 
+/// Materialize the same checked load path used by listing, including saved events.
 fn read_run_at(directory: &File, id: &str) -> Result<Run> {
     let loaded = read_record_at(directory, id, EventReadMode::CollectEvents)?;
     Ok(Run {
@@ -2721,6 +3457,7 @@ fn read_run_at(directory: &File, id: &str) -> Result<Run> {
             .events
             .expect("CollectEvents always retains successfully decoded events"),
         storage_integrity: loaded.storage_integrity,
+        raw_integrity: loaded.raw_integrity,
     })
 }
 
@@ -2731,2032 +3468,4 @@ fn read_run(directory: PathBuf, metadata: Metadata) -> Result<Run> {
 }
 
 #[cfg(test)]
-mod identity_tests {
-    use super::{
-        AtomicControl, AtomicStaging, AtomicStep, CommitFailure, CommitStage, EventFacts,
-        EventFileSummary, EventReadMode, FileCheck, Finalized, PublishedFile, StorageError, all,
-        atomic_replace_with_control, check, copy_anonymous_to_named, create_named_staging,
-        create_staging, decode_events, decode_finalized, decode_metadata, delete, file_stat,
-        finalized_integrity, finish, finish_at_with_control, load, load_outcome, lock, lock_error,
-        metadata, neutral_load_failure, open, open_directory, read_back_published_events,
-        read_record_at, read_run, records, required_record_file_error, storage_load_failure_kind,
-        stream_event_readback, tmpfile_is_unsupported, tmpfile_link_is_unsupported, unlink_at,
-        valid_id, validate_metadata_contract, validate_run_contract, verify_staging_for_publish,
-    };
-    use crate::model::{
-        Event, Evidence, LoadOutcome, Metadata, RecordSummary, StorageLoadFailureKind,
-    };
-    use std::{
-        collections::BTreeMap,
-        ffi::CString,
-        fs,
-        io::{Read as _, Seek as _, SeekFrom, Write as _},
-        os::fd::AsRawFd,
-        os::unix::{
-            ffi::OsStrExt,
-            fs::{PermissionsExt, symlink},
-        },
-        path::{Path, PathBuf},
-        process::Command,
-        sync::atomic::{AtomicU64, Ordering},
-    };
-
-    static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
-
-    struct TestDir(PathBuf);
-
-    impl TestDir {
-        fn new(label: &str) -> Self {
-            let path = std::env::temp_dir().join(format!(
-                "rundelta-{label}-{}-{}",
-                std::process::id(),
-                NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
-            ));
-            fs::create_dir(&path).unwrap();
-            Self(path)
-        }
-
-        fn path(&self) -> &Path {
-            &self.0
-        }
-    }
-
-    impl Drop for TestDir {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
-        }
-    }
-
-    fn metadata_fixture(id: &str) -> Metadata {
-        Metadata {
-            schema_version: 3,
-            tool_version: "test".into(),
-            id: id.into(),
-            name: "test".into(),
-            command: vec!["true".into()],
-            cwd: "/".into(),
-            started: 1,
-            ended: None,
-            backend: "test".into(),
-            state: "running".into(),
-            exit_code: None,
-            signal: None,
-            warnings: vec![],
-            parsed_events: 0,
-            raw_lines: 0,
-            environment: Some(BTreeMap::new()),
-            completeness: Some("pending".into()),
-            collector_exit_code: None,
-            collector_signal: None,
-            target_exit_raw: None,
-        }
-    }
-
-    fn event_fixture(schema_version: u32) -> Event {
-        Event {
-            schema_version,
-            pid: "1".into(),
-            kind: "exit".into(),
-            operation: "exit".into(),
-            path: None,
-            outcome: "+++ exited with 0 +++".into(),
-            evidence: Evidence {
-                file: "raw/trace.log".into(),
-                line: 1,
-                end_line: 1,
-            },
-            argv: None,
-            child_pid: None,
-            cwd_before: None,
-            context_uncertain: false,
-        }
-    }
-
-    fn completed_metadata_fixture(id: &str) -> Metadata {
-        let mut metadata = metadata_fixture(id);
-        metadata.state = "completed".into();
-        // Wall-clock time may move backwards; ordering is not a storage invariant.
-        metadata.ended = Some(0);
-        metadata.exit_code = Some(0);
-        metadata.collector_exit_code = Some(0);
-        metadata.target_exit_raw = Some("opaque target exit spelling".into());
-        metadata.completeness = Some("complete_for_supported_events".into());
-        metadata.parsed_events = 1;
-        metadata.raw_lines = 1;
-        metadata
-    }
-
-    fn storage_error(error: &anyhow::Error) -> &StorageError {
-        error
-            .chain()
-            .find_map(|source| source.downcast_ref::<StorageError>())
-            .expect("typed storage error")
-    }
-
-    fn commit_failure(error: &anyhow::Error) -> &CommitFailure {
-        error
-            .chain()
-            .find_map(|source| source.downcast_ref::<CommitFailure>())
-            .expect("typed commit failure")
-    }
-
-    fn staging_entries(directory: &Path) -> Vec<String> {
-        let mut entries = fs::read_dir(directory)
-            .unwrap()
-            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
-            .filter(|name| name.starts_with(".rundelta-tmp-"))
-            .collect::<Vec<_>>();
-        entries.sort();
-        entries
-    }
-
-    fn create_current_record(root: &Path, id: &str, name: &str) {
-        let run_dir = root.join("runs").join(id);
-        fs::create_dir(&run_dir).unwrap();
-        let event = event_fixture(2);
-        let mut metadata = metadata_fixture(id);
-        metadata.name = name.into();
-        metadata.state = "completed".into();
-        metadata.ended = Some(2);
-        metadata.completeness = Some("complete_for_supported_events".into());
-        metadata.exit_code = Some(0);
-        metadata.collector_exit_code = Some(0);
-        metadata.target_exit_raw = Some("+++ exited with 0 +++".into());
-        metadata.parsed_events = 1;
-        metadata.raw_lines = 1;
-        finish(&run_dir, &metadata, &[event]).unwrap();
-    }
-
-    fn read_finalized_fixture(
-        metadata_schema: u32,
-        event_schemas: &[u32],
-    ) -> super::Result<crate::model::Run> {
-        let temp = TestDir::new("schema-tuple");
-        let run_dir = temp.path().join("abc-1");
-        fs::create_dir(&run_dir).unwrap();
-        let mut metadata = metadata_fixture("abc-1");
-        metadata.schema_version = metadata_schema;
-        metadata.state = "completed".into();
-        metadata.ended = Some(2);
-        metadata.completeness = Some("complete_for_supported_events".into());
-        metadata.exit_code = Some(0);
-        metadata.collector_exit_code = Some(0);
-        metadata.target_exit_raw = Some("+++ exited with 0 +++".into());
-        metadata.parsed_events = event_schemas.len();
-        metadata.raw_lines = usize::from(!event_schemas.is_empty());
-        let metadata_bytes = serde_json::to_vec_pretty(&metadata).unwrap();
-        let mut event_bytes = Vec::new();
-        for schema in event_schemas {
-            serde_json::to_writer(&mut event_bytes, &event_fixture(*schema)).unwrap();
-            event_bytes.push(b'\n');
-        }
-        fs::write(run_dir.join("metadata.json"), &metadata_bytes).unwrap();
-        fs::write(run_dir.join("events.jsonl"), &event_bytes).unwrap();
-        let marker = Finalized {
-            schema_version: 1,
-            run_id: metadata.id.clone(),
-            event_count: event_schemas.len(),
-            events: check(&event_bytes),
-            metadata: check(&metadata_bytes),
-        };
-        fs::write(
-            run_dir.join("finalized.json"),
-            serde_json::to_vec_pretty(&marker).unwrap(),
-        )
-        .unwrap();
-        read_run(run_dir, metadata)
-    }
-
-    #[test]
-    fn recovery_accepts_only_generated_id_shape() {
-        for id in ["18d6e85e2b868e79-24369", "abc-1"] {
-            assert!(valid_id(id));
-        }
-        for id in [
-            "../abc-1",
-            "/abc-1",
-            "abc-1/child",
-            "abc-0",
-            "abc--1",
-            "not-a-run-id",
-            "",
-            "abc-999999999999999",
-            "abc-1\n",
-        ] {
-            assert!(!valid_id(id), "{id:?}");
-        }
-    }
-
-    #[test]
-    fn fixed_metadata_temp_hardlink_is_ignored_without_touching_external_inode() {
-        let temp = TestDir::new("metadata-hardlink");
-        let run = temp.path().join("run");
-        fs::create_dir(&run).unwrap();
-        let sentinel = temp.path().join("sentinel");
-        fs::write(&sentinel, b"outside stays unchanged").unwrap();
-        fs::hard_link(&sentinel, run.join("metadata.tmp")).unwrap();
-
-        metadata(&run, &metadata_fixture("abc-1")).unwrap();
-
-        assert_eq!(fs::read(&sentinel).unwrap(), b"outside stays unchanged");
-        assert_eq!(
-            fs::read(run.join("metadata.tmp")).unwrap(),
-            b"outside stays unchanged"
-        );
-        assert!(run.join("metadata.json").is_file());
-    }
-
-    #[test]
-    fn lock_rejects_runs_symlink_before_any_record_operation() {
-        let temp = TestDir::new("runs-symlink");
-        let root = temp.path().join("storage");
-        let outside = temp.path().join("outside");
-        fs::create_dir(&root).unwrap();
-        fs::create_dir(&outside).unwrap();
-        symlink(&outside, root.join("runs")).unwrap();
-
-        let error = lock(&root).err().expect("runs symlink must be rejected");
-
-        assert!(error.to_string().contains("unsafe storage root"));
-        assert!(outside.exists());
-    }
-
-    #[test]
-    fn lock_rejects_symlink_and_fifo_leaves_without_touching_their_targets() {
-        let temp = TestDir::new("special-lock-leaf");
-        let root = temp.path().join("storage");
-        let storage = open(&root).unwrap();
-        let sentinel = temp.path().join("sentinel");
-        fs::write(&sentinel, b"keep").unwrap();
-        let lock_path = root.join(".record.lock");
-
-        symlink(&sentinel, &lock_path).unwrap();
-        assert!(storage.lock().is_err());
-        assert_eq!(fs::read(&sentinel).unwrap(), b"keep");
-        fs::remove_file(&lock_path).unwrap();
-
-        let fifo = CString::new(lock_path.as_os_str().as_bytes()).unwrap();
-        // SAFETY: fifo is a live NUL-terminated path; mkfifo retains no pointer.
-        assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) }, 0);
-        let error = storage
-            .lock()
-            .err()
-            .expect("a FIFO lock leaf must be rejected without blocking");
-        assert!(error.to_string().contains("unsafe storage lock"));
-        assert_eq!(fs::read(&sentinel).unwrap(), b"keep");
-    }
-
-    #[test]
-    fn storage_root_holds_cloexec_directory_descriptors() {
-        let temp = TestDir::new("storage-root-fds");
-        let storage = open(&temp.path().join("storage")).unwrap();
-
-        for fd in [storage.root_dir.as_raw_fd(), storage.runs_dir.as_raw_fd()] {
-            // SAFETY: storage owns both live fds; F_GETFD uses no third argument
-            // and does not transfer descriptor ownership.
-            let descriptor_flags = unsafe { libc::fcntl(fd, libc::F_GETFD) };
-            assert!(descriptor_flags >= 0);
-            assert_ne!(descriptor_flags & libc::FD_CLOEXEC, 0);
-            let mut status = std::mem::MaybeUninit::<libc::stat>::uninit();
-            // SAFETY: the live fd is borrowed and status is writable storage
-            // for exactly one libc stat structure.
-            assert_eq!(unsafe { libc::fstat(fd, status.as_mut_ptr()) }, 0);
-            // SAFETY: the preceding assertion guarantees fstat initialized it.
-            let status = unsafe { status.assume_init() };
-            assert_eq!(status.st_mode & libc::S_IFMT, libc::S_IFDIR);
-        }
-
-        let real_root = temp.path().join("real-root");
-        fs::create_dir(&real_root).unwrap();
-        let linked_root = temp.path().join("linked-root");
-        symlink(&real_root, &linked_root).unwrap();
-        let error = open(&linked_root)
-            .err()
-            .expect("the storage root itself must not be followed");
-        assert!(error.to_string().contains("unsafe storage root"));
-    }
-
-    #[test]
-    fn facade_and_compatibility_wrappers_are_equivalent() {
-        let temp = TestDir::new("storage-root-wrappers");
-        let root = temp.path().join("storage");
-        let absent = temp.path().join("absent");
-        assert!(records(&absent).unwrap().is_empty());
-        assert!(all(&absent).unwrap().is_empty());
-        assert!(load(&absent, "missing").is_err());
-        assert!(!absent.exists());
-
-        let storage = open(&root).unwrap();
-        create_current_record(&root, "abc-1", "first");
-        create_current_record(&root, "def-2", "second");
-
-        assert_eq!(
-            serde_json::to_value(storage.load("first").unwrap()).unwrap(),
-            serde_json::to_value(load(&root, "first").unwrap()).unwrap()
-        );
-        let facade_records = storage.records().unwrap();
-        let wrapper_records = records(&root).unwrap();
-        assert_eq!(facade_records.len(), wrapper_records.len());
-        for (facade, wrapper) in facade_records.iter().zip(&wrapper_records) {
-            match (facade, wrapper) {
-                (
-                    RecordSummary::Readable {
-                        metadata: left,
-                        directory: left_directory,
-                        storage_integrity: left_integrity,
-                    },
-                    RecordSummary::Readable {
-                        metadata: right,
-                        directory: right_directory,
-                        storage_integrity: right_integrity,
-                    },
-                ) => {
-                    assert_eq!(
-                        serde_json::to_value(left).unwrap(),
-                        serde_json::to_value(right).unwrap()
-                    );
-                    assert_eq!(left_directory, right_directory);
-                    assert_eq!(left_integrity.status, right_integrity.status);
-                    assert_eq!(left_integrity.detail, right_integrity.detail);
-                }
-                _ => panic!("facade and compatibility wrapper returned different row shapes"),
-            }
-        }
-        let identities = storage.identities().unwrap();
-        let compatibility = all(&root).unwrap();
-        assert_eq!(identities.len(), compatibility.len());
-        for identity in identities {
-            let (path, old_identity) = compatibility
-                .iter()
-                .find(|(_, candidate)| candidate.id == identity.id)
-                .unwrap();
-            assert_eq!(old_identity.name, identity.name);
-            assert_eq!(path, &root.join("runs").join(&identity.id));
-        }
-
-        let held = storage.lock().unwrap();
-        let error = lock(&root).err().expect("second lock must be rejected");
-        assert!(error.to_string().contains("storage busy"));
-        drop(held);
-        drop(lock(&root).unwrap());
-        assert_eq!(storage.delete("first").unwrap(), "abc-1");
-        assert_eq!(delete(&root, "second").unwrap(), "def-2");
-    }
-
-    #[test]
-    fn one_facade_stays_anchored_when_the_declared_path_is_swapped() {
-        let temp = TestDir::new("storage-root-anchor");
-        let root = temp.path().join("storage");
-        let moved = temp.path().join("opened-storage");
-        let moved_runs = moved.join("opened-runs");
-        let outside = temp.path().join("outside");
-        let storage = open(&root).unwrap();
-        create_current_record(&root, "abc-1", "anchored");
-
-        fs::rename(&root, &moved).unwrap();
-        fs::rename(moved.join("runs"), &moved_runs).unwrap();
-        fs::create_dir(&root).unwrap();
-        let outside_record = outside.join("abc-1");
-        fs::create_dir_all(&outside_record).unwrap();
-        let sentinel = outside_record.join("sentinel");
-        fs::write(&sentinel, b"outside remains").unwrap();
-        symlink(&outside, moved.join("runs")).unwrap();
-        symlink(&outside, root.join("runs")).unwrap();
-
-        assert_eq!(storage.load("anchored").unwrap().metadata.id, "abc-1");
-        assert_eq!(storage.records().unwrap().len(), 1);
-        assert_eq!(storage.delete("abc-1").unwrap(), "abc-1");
-        assert!(!moved_runs.join("abc-1").exists());
-        assert_eq!(fs::read(&sentinel).unwrap(), b"outside remains");
-        assert!(moved.join("runs").is_symlink());
-        assert!(root.join("runs").is_symlink());
-    }
-
-    #[test]
-    fn run_writer_owns_the_normal_layout_and_trace_inode() {
-        let temp = TestDir::new("run-writer-layout");
-        let root = temp.path().join("storage");
-        let storage = open(&root).unwrap();
-        let mut writer = storage.begin_run_with_id("fresh", "abc-1".into()).unwrap();
-        let run = root.join("runs/abc-1");
-
-        assert_eq!(writer.id(), "abc-1");
-        assert_eq!(writer.evidence_dir(), run);
-        assert_eq!(
-            fs::metadata(&run).unwrap().permissions().mode() & 0o777,
-            0o700
-        );
-        assert!(run.join("raw").is_dir());
-        assert!(run.join("raw/trace.log").is_file());
-        assert_eq!(
-            fs::metadata(run.join("raw/trace.log"))
-                .unwrap()
-                .permissions()
-                .mode()
-                & 0o777,
-            0o600
-        );
-        for fd in [
-            writer.storage.root_dir.as_raw_fd(),
-            writer.storage.runs_dir.as_raw_fd(),
-            writer.run_dir.as_raw_fd(),
-            writer.raw_dir.as_raw_fd(),
-            writer.trace_file.as_raw_fd(),
-        ] {
-            // SAFETY: writer owns each live fd; F_GETFD uses no third argument
-            // and does not transfer descriptor ownership.
-            let flags = unsafe { libc::fcntl(fd, libc::F_GETFD) };
-            assert!(flags >= 0);
-            assert_ne!(flags & libc::FD_CLOEXEC, 0);
-        }
-
-        let mut metadata = metadata_fixture(writer.id());
-        metadata.name = "fresh".into();
-        writer.write_metadata(&metadata).unwrap();
-        let target = writer.trace_target().unwrap();
-        let status = Command::new("/bin/sh")
-            .args(["-c", "printf 'synthetic trace\\n' > \"$1\"", "writer"])
-            .arg(&target)
-            .status()
-            .unwrap();
-        assert!(status.success());
-        assert_eq!(writer.read_trace().unwrap(), "synthetic trace\n");
-
-        let event = event_fixture(2);
-        metadata.state = "completed".into();
-        metadata.ended = Some(2);
-        metadata.exit_code = Some(0);
-        metadata.collector_exit_code = Some(0);
-        metadata.target_exit_raw = Some("+++ exited with 0 +++".into());
-        metadata.parsed_events = 1;
-        metadata.raw_lines = 1;
-        metadata.completeness = Some("complete_for_supported_events".into());
-        writer.finish(&metadata, &[event]).unwrap();
-        drop(lock(&root).expect("finalization releases its lock"));
-        assert_eq!(
-            load(&root, "fresh").unwrap().storage_integrity.status,
-            "verified"
-        );
-    }
-
-    #[test]
-    fn trace_streaming_facade_bounds_memory_and_preserves_line_termination() {
-        let temp = TestDir::new("trace-streaming-facade");
-        let root = temp.path().join("storage");
-        let mut writer = open(&root)
-            .unwrap()
-            .begin_run_with_id("stream", "abc-1".into())
-            .unwrap();
-        let large = "x".repeat(192 * 1024);
-        let contents = format!("{large}\r\nunterminated");
-        writer.trace_file.write_all(contents.as_bytes()).unwrap();
-        assert_eq!(writer.trace_len().unwrap(), contents.len() as u64);
-
-        let mut lines = Vec::new();
-        writer
-            .for_each_trace_line(|line| {
-                lines.push(line.to_owned());
-                Ok(())
-            })
-            .unwrap();
-        assert_eq!(lines, [format!("{large}\r\n"), "unterminated".into()]);
-
-        writer.trace_file.set_len(0).unwrap();
-        writer.trace_file.seek(SeekFrom::Start(0)).unwrap();
-        writer
-            .trace_file
-            .write_all(b"valid\ninvalid:\xff\n")
-            .unwrap();
-        let mut accepted = Vec::new();
-        let error = writer
-            .for_each_trace_line(|line| {
-                accepted.push(line.to_owned());
-                Ok(())
-            })
-            .expect_err("each logical line must be valid UTF-8");
-        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
-        assert_eq!(accepted, ["valid\n"]);
-    }
-
-    #[test]
-    fn initial_metadata_cannot_be_replaced_or_retried_after_an_io_error() {
-        let temp = TestDir::new("writer-initial-once");
-        let root = temp.path().join("storage");
-        for fail_first in [false, true] {
-            let id = if fail_first { "abc-1" } else { "def-2" };
-            let mut writer = open(&root)
-                .unwrap()
-                .begin_run_with_id("writer", id.into())
-                .unwrap();
-            let mut metadata = metadata_fixture(id);
-            metadata.name = "writer".into();
-            let path = writer.evidence_dir().join("metadata.json");
-            if fail_first {
-                fs::create_dir(&path).unwrap();
-                assert!(writer.write_metadata(&metadata).is_err());
-                fs::remove_dir(&path).unwrap();
-            } else {
-                writer.write_metadata(&metadata).unwrap();
-            }
-            let before = fs::read(&path).ok();
-            metadata.backend = "must not replace initial metadata".into();
-            assert!(writer.write_metadata(&metadata).is_err());
-            assert_eq!(fs::read(&path).ok(), before);
-            assert!(!writer.evidence_dir().join("finalized.json").exists());
-            drop(writer);
-            drop(lock(&root).expect("failed initialization must release the lock"));
-            // Each iteration reserves the same label only after its old record
-            // is removed by this test's explicit directory cleanup.
-            fs::remove_dir_all(root.join("runs").join(id)).unwrap();
-        }
-    }
-
-    #[test]
-    fn writer_requires_initial_metadata_before_finalization() {
-        let temp = TestDir::new("writer-needs-initial");
-        let root = temp.path().join("storage");
-        let writer = open(&root)
-            .unwrap()
-            .begin_run_with_id("test", "abc-1".into())
-            .unwrap();
-        assert!(
-            writer
-                .finish(&completed_metadata_fixture("abc-1"), &[event_fixture(2)])
-                .is_err()
-        );
-        assert!(!root.join("runs/abc-1/events.jsonl").exists());
-        assert!(!root.join("runs/abc-1/finalized.json").exists());
-        drop(lock(&root).expect("rejected finalization releases its lock"));
-    }
-
-    #[test]
-    fn writer_authority_is_exclusive_and_finish_consumes_it() {
-        // These assignments are compile-time regressions against weakening the
-        // receivers back to shared borrows, without adding a compile-test crate.
-        let _: fn(&mut super::RunWriter, &Metadata) -> anyhow::Result<()> =
-            super::RunWriter::write_metadata;
-        let _: fn(super::RunWriter, &Metadata, &[Event]) -> anyhow::Result<()> =
-            super::RunWriter::finish;
-
-        let temp = TestDir::new("writer-finalization-error");
-        let root = temp.path().join("storage");
-        let mut writer = open(&root)
-            .unwrap()
-            .begin_run_with_id("test", "abc-1".into())
-            .unwrap();
-        assert!(
-            writer
-                .write_metadata(&completed_metadata_fixture("abc-1"))
-                .is_err()
-        );
-        let initial = metadata_fixture("abc-1");
-        writer.write_metadata(&initial).unwrap();
-        // A finalized record cannot contain running metadata; rejection still
-        // consumes the writer and releases its resources without a marker.
-        assert!(writer.finish(&initial, &[]).is_err());
-        drop(lock(&root).expect("failed finalization releases its lock"));
-        assert!(!root.join("runs/abc-1/finalized.json").exists());
-    }
-
-    #[test]
-    fn begin_run_rejects_all_name_and_id_collision_directions() {
-        let temp = TestDir::new("run-writer-collisions");
-        let root = temp.path().join("storage");
-        open(&root).unwrap();
-        create_current_record(&root, "abc-1", "def-2");
-
-        for (name, id, expected) in [
-            ("def-2", "fed-3", "record name already exists"),
-            ("abc-1", "fed-3", "record name already exists"),
-            ("fresh", "def-2", "record ID already exists"),
-            ("fresh", "abc-1", "record ID already exists"),
-        ] {
-            let error = open(&root)
-                .unwrap()
-                .begin_run_with_id(name, id.into())
-                .err()
-                .expect("all four collision directions must be rejected");
-            assert!(
-                error.to_string().contains(expected),
-                "name={name:?} id={id:?}: {error:#}"
-            );
-        }
-        assert!(!root.join("runs/fed-3").exists());
-    }
-
-    #[test]
-    fn damaged_index_hints_reserve_all_name_and_id_collision_directions() {
-        let temp = TestDir::new("damaged-run-writer-collisions");
-        let root = temp.path().join("storage");
-        open(&root).unwrap();
-        open(&root).unwrap().check_name_available("feed-5").unwrap();
-        let damaged = root.join("runs/dead-4");
-        fs::create_dir(&damaged).unwrap();
-        fs::write(
-            damaged.join("metadata.json"),
-            br#"{"schema_version":999,"name":"feed-5"}"#,
-        )
-        .unwrap();
-
-        for (name, id, expected) in [
-            ("feed-5", "cafe-6", "record name already exists"),
-            ("dead-4", "cafe-6", "record name already exists"),
-            ("fresh", "feed-5", "record ID already exists"),
-            ("fresh", "dead-4", "record ID already exists"),
-        ] {
-            let error = open(&root)
-                .unwrap()
-                .begin_run_with_id(name, id.into())
-                .err()
-                .expect("damaged index hints must remain reserved");
-            assert!(
-                error.to_string().contains(expected),
-                "name={name:?} id={id:?}: {error:#}"
-            );
-        }
-        assert!(!root.join("runs/cafe-6").exists());
-    }
-
-    #[test]
-    fn typed_record_summaries_isolate_every_damage_class() {
-        let temp = TestDir::new("typed-record-summaries");
-        let root = temp.path().join("storage");
-        open(&root).unwrap();
-        create_current_record(&root, "a00-1", "healthy");
-
-        let runs = root.join("runs");
-        let corrupt = runs.join("b00-2");
-        fs::create_dir(&corrupt).unwrap();
-        fs::write(
-            corrupt.join("metadata.json"),
-            br#"{"schema_version":3,"name":"corrupt-label"}"#,
-        )
-        .unwrap();
-
-        let future = runs.join("c00-3");
-        fs::create_dir(&future).unwrap();
-        fs::write(
-            future.join("metadata.json"),
-            br#"{"schema_version":999,"name":"future-label"}"#,
-        )
-        .unwrap();
-
-        let unavailable = runs.join("d00-4");
-        fs::create_dir(&unavailable).unwrap();
-        let sentinel = temp.path().join("outside-metadata");
-        fs::write(&sentinel, b"outside sentinel").unwrap();
-        symlink(&sentinel, unavailable.join("metadata.json")).unwrap();
-
-        let missing_label = runs.join("e00-5");
-        fs::create_dir(&missing_label).unwrap();
-        fs::write(missing_label.join("metadata.json"), b"{broken").unwrap();
-
-        fs::create_dir(runs.join("not-a-run-id")).unwrap();
-
-        let summaries = records(&root).unwrap();
-        assert_eq!(summaries.len(), 6);
-        let summary = |directory: &str| {
-            summaries
-                .iter()
-                .find(|summary| match summary {
-                    RecordSummary::Readable {
-                        directory: candidate,
-                        ..
-                    }
-                    | RecordSummary::Unreadable {
-                        directory: candidate,
-                        ..
-                    } => candidate == directory,
-                })
-                .unwrap()
-        };
-
-        match summary("runs/a00-1") {
-            RecordSummary::Readable {
-                metadata,
-                storage_integrity,
-                ..
-            } => {
-                assert_eq!(metadata.name, "healthy");
-                assert_eq!(storage_integrity.status, "verified");
-            }
-            _ => panic!("healthy row must be readable"),
-        }
-        for (directory, id, name, status) in [
-            (
-                "runs/b00-2",
-                Some("b00-2"),
-                Some("corrupt-label"),
-                "corrupt",
-            ),
-            (
-                "runs/c00-3",
-                Some("c00-3"),
-                Some("future-label"),
-                "unsupported",
-            ),
-            ("runs/d00-4", Some("d00-4"), None, "unavailable"),
-            ("runs/e00-5", Some("e00-5"), None, "corrupt"),
-            ("runs/not-a-run-id", None, None, "unavailable"),
-        ] {
-            match summary(directory) {
-                RecordSummary::Unreadable {
-                    id: actual_id,
-                    name: actual_name,
-                    storage_integrity,
-                    ..
-                } => {
-                    assert_eq!(actual_id.as_deref(), id);
-                    assert_eq!(actual_name.as_deref(), name);
-                    assert_eq!(storage_integrity.status, status);
-                }
-                _ => panic!("damaged row {directory} must remain isolated"),
-            }
-        }
-        assert_eq!(fs::read(sentinel).unwrap(), b"outside sentinel");
-    }
-
-    #[test]
-    fn fd_relative_delete_unlinks_internal_special_files_without_following_them() {
-        let temp = TestDir::new("delete-special-leaves");
-        let root = temp.path().join("storage");
-        open(&root).unwrap();
-        create_current_record(&root, "abc-1", "victim");
-        let run = root.join("runs/abc-1");
-        let outside = temp.path().join("outside");
-        fs::create_dir(&outside).unwrap();
-        let sentinel = outside.join("sentinel");
-        fs::write(&sentinel, b"keep").unwrap();
-        fs::create_dir(run.join("nested")).unwrap();
-        symlink(&outside, run.join("nested/link")).unwrap();
-        let fifo = run.join("nested/pipe");
-        let fifo_name = CString::new(fifo.as_os_str().as_bytes()).unwrap();
-        // SAFETY: fifo_name is a live NUL-terminated path; mkfifo retains no pointer.
-        assert_eq!(unsafe { libc::mkfifo(fifo_name.as_ptr(), 0o600) }, 0);
-
-        assert_eq!(delete(&root, "victim").unwrap(), "abc-1");
-        assert!(!run.exists());
-        assert_eq!(fs::read(&sentinel).unwrap(), b"keep");
-
-        symlink(&outside, root.join("runs/def-2")).unwrap();
-        let error = delete(&root, "def-2").expect_err("a run leaf symlink must not be selected");
-        assert!(
-            error
-                .to_string()
-                .contains("expected one safe ID/label match")
-        );
-        assert_eq!(fs::read(&sentinel).unwrap(), b"keep");
-    }
-
-    #[test]
-    fn run_leaf_swap_fails_closed_before_delete_or_trace_output() {
-        let temp = TestDir::new("run-leaf-swap");
-        let root = temp.path().join("storage");
-        let storage = open(&root).unwrap();
-        create_current_record(&root, "abc-1", "victim");
-        let entry = storage.resolve("victim").unwrap();
-        let original = root.join("runs/original");
-        fs::rename(root.join("runs/abc-1"), &original).unwrap();
-        let outside = temp.path().join("outside");
-        fs::create_dir(&outside).unwrap();
-        let sentinel = outside.join("sentinel");
-        fs::write(&sentinel, b"keep").unwrap();
-        symlink(&outside, root.join("runs/abc-1")).unwrap();
-
-        let error = storage
-            .delete_resolved(entry)
-            .expect_err("the resolved leaf identity changed");
-        assert!(error.to_string().contains("unsafe record directory"));
-        assert!(original.join("metadata.json").is_file());
-        assert_eq!(fs::read(&sentinel).unwrap(), b"keep");
-
-        fs::remove_file(root.join("runs/abc-1")).unwrap();
-        fs::rename(&original, root.join("runs/abc-1")).unwrap();
-        assert_eq!(storage.delete("victim").unwrap(), "abc-1");
-
-        let writer = open(&root)
-            .unwrap()
-            .begin_run_with_id("writer", "def-2".into())
-            .unwrap();
-        let moved = root.join("runs/moved-writer");
-        fs::rename(root.join("runs/def-2"), &moved).unwrap();
-        symlink(&outside, root.join("runs/def-2")).unwrap();
-        let error = writer
-            .trace_target()
-            .expect_err("trace output must fail closed after a leaf swap");
-        assert!(error.to_string().contains("record directory changed"));
-        assert_eq!(fs::read(&sentinel).unwrap(), b"keep");
-    }
-
-    #[test]
-    fn trace_handle_stays_inside_the_opened_root_after_ancestor_swap() {
-        let temp = TestDir::new("trace-ancestor-swap");
-        let root = temp.path().join("storage");
-        let moved = temp.path().join("opened-storage");
-        let outside = temp.path().join("outside");
-        let mut writer = open(&root)
-            .unwrap()
-            .begin_run_with_id("writer", "abc-1".into())
-            .unwrap();
-        let mut metadata = metadata_fixture(writer.id());
-        metadata.name = "writer".into();
-        writer.write_metadata(&metadata).unwrap();
-
-        fs::rename(&root, &moved).unwrap();
-        fs::create_dir(&root).unwrap();
-        fs::create_dir(&outside).unwrap();
-        let sentinel = outside.join("sentinel");
-        fs::write(&sentinel, b"outside").unwrap();
-        symlink(&outside, root.join("runs")).unwrap();
-        let target = writer.trace_target().unwrap();
-        fs::write(target, b"anchored\n").unwrap();
-
-        assert_eq!(writer.read_trace().unwrap(), "anchored\n");
-        assert_eq!(
-            fs::read(moved.join("runs/abc-1/raw/trace.log")).unwrap(),
-            b"anchored\n"
-        );
-        assert_eq!(fs::read(&sentinel).unwrap(), b"outside");
-    }
-
-    #[test]
-    fn only_the_current_finalized_schema_tuple_is_verified() {
-        let event_v1 = event_fixture(1);
-        let event_v2 = event_fixture(2);
-        for metadata_schema in [1, 2] {
-            for events in [
-                Vec::new(),
-                vec![event_v1.clone()],
-                vec![event_v2.clone()],
-                vec![event_v1.clone(), event_v2.clone()],
-            ] {
-                assert_eq!(
-                    finalized_integrity(metadata_schema, &events)
-                        .unwrap()
-                        .status,
-                    "unverified"
-                );
-            }
-        }
-        assert_eq!(finalized_integrity(3, &[]).unwrap().status, "verified");
-        assert_eq!(
-            finalized_integrity(3, std::slice::from_ref(&event_v2))
-                .unwrap()
-                .status,
-            "verified"
-        );
-        assert!(finalized_integrity(3, std::slice::from_ref(&event_v1)).is_err());
-        assert!(finalized_integrity(3, &[event_v1, event_v2]).is_err());
-    }
-
-    #[test]
-    fn finalized_reader_does_not_promote_legacy_or_accept_mixed_current_events() {
-        for metadata_schema in [1, 2] {
-            for event_schemas in [&[1][..], &[2][..], &[1, 2][..]] {
-                assert_eq!(
-                    read_finalized_fixture(metadata_schema, event_schemas)
-                        .unwrap()
-                        .storage_integrity
-                        .status,
-                    "unverified"
-                );
-            }
-        }
-        assert_eq!(
-            read_finalized_fixture(3, &[2])
-                .unwrap()
-                .storage_integrity
-                .status,
-            "verified"
-        );
-        assert!(read_finalized_fixture(3, &[1]).is_err());
-        assert!(read_finalized_fixture(3, &[1, 2]).is_err());
-    }
-
-    #[test]
-    fn streaming_load_collects_large_events_while_list_validates_without_retaining_them() {
-        let temp = TestDir::new("streaming-load-modes");
-        let root = temp.path().join("storage");
-        let storage = open(&root).unwrap();
-        let run_dir = root.join("runs/abc-1");
-        fs::create_dir(&run_dir).unwrap();
-        let mut event = event_fixture(2);
-        event.outcome = "x".repeat(512 * 1024 + 37);
-        let metadata = completed_metadata_fixture("abc-1");
-        finish(&run_dir, &metadata, std::slice::from_ref(&event)).unwrap();
-
-        let loaded = storage.load("abc-1").unwrap();
-        assert_eq!(loaded.events.len(), 1);
-        assert_eq!(loaded.events[0].outcome, event.outcome);
-        assert_eq!(loaded.storage_integrity.status, "verified");
-
-        let directory = open_directory(&run_dir).unwrap();
-        let validated = read_record_at(&directory, "abc-1", EventReadMode::ValidateOnly).unwrap();
-        assert!(validated.events.is_none());
-        assert_eq!(validated.storage_integrity.status, "verified");
-        assert!(matches!(
-            storage.records().unwrap().as_slice(),
-            [RecordSummary::Readable { .. }]
-        ));
-    }
-
-    #[test]
-    fn markerless_legacy_events_still_stream_and_remain_unverified() {
-        let temp = TestDir::new("streaming-legacy");
-        let run_dir = temp.path().join("abc-1");
-        fs::create_dir(&run_dir).unwrap();
-        let mut metadata = completed_metadata_fixture("abc-1");
-        metadata.schema_version = 1;
-        metadata.environment = None;
-        metadata.completeness = None;
-        let mut event = event_fixture(1);
-        event.outcome = "legacy".repeat(48 * 1024);
-        let mut event_bytes = serde_json::to_vec(&event).unwrap();
-        event_bytes.push(b'\n');
-        fs::write(
-            run_dir.join("metadata.json"),
-            serde_json::to_vec_pretty(&metadata).unwrap(),
-        )
-        .unwrap();
-        fs::write(run_dir.join("events.jsonl"), event_bytes).unwrap();
-
-        let loaded = read_run(run_dir.clone(), metadata.clone()).unwrap();
-        assert_eq!(loaded.events.len(), 1);
-        assert_eq!(
-            serde_json::to_value(&loaded.events[0]).unwrap(),
-            serde_json::to_value(&event).unwrap()
-        );
-        assert_eq!(loaded.storage_integrity.status, "unverified");
-        let directory = open_directory(&run_dir).unwrap();
-        let validated = read_record_at(&directory, "abc-1", EventReadMode::ValidateOnly).unwrap();
-        assert!(validated.events.is_none());
-        assert_eq!(validated.storage_integrity.status, "unverified");
-    }
-
-    #[test]
-    fn current_record_without_marker_never_reads_speculative_events() {
-        let temp = TestDir::new("unfinalized-no-events-read");
-        let root = temp.path().join("storage");
-        let storage = open(&root).unwrap();
-        let run_dir = root.join("runs/abc-1");
-        fs::create_dir(&run_dir).unwrap();
-        let metadata = completed_metadata_fixture("abc-1");
-        fs::write(
-            run_dir.join("metadata.json"),
-            serde_json::to_vec_pretty(&metadata).unwrap(),
-        )
-        .unwrap();
-        let events_fifo = run_dir.join("events.jsonl");
-        let events_fifo = CString::new(events_fifo.as_os_str().as_bytes()).unwrap();
-        // SAFETY: events_fifo is a live NUL-terminated path; mkfifo retains no pointer.
-        assert_eq!(unsafe { libc::mkfifo(events_fifo.as_ptr(), 0o600) }, 0);
-
-        let loaded = storage.load("abc-1").unwrap();
-        assert!(loaded.events.is_empty());
-        assert_eq!(loaded.storage_integrity.status, "unfinalized");
-        match storage.records().unwrap().as_slice() {
-            [
-                RecordSummary::Readable {
-                    storage_integrity, ..
-                },
-            ] => assert_eq!(storage_integrity.status, "unfinalized"),
-            _ => panic!("an unfinalized current record remains listable"),
-        }
-    }
-
-    #[test]
-    fn events_jsonl_bytes_and_lexical_error_priority_are_frozen() {
-        let event = event_fixture(2);
-        let mut bytes = serde_json::to_vec(&event).unwrap();
-        bytes.push(b'\n');
-        assert_eq!(
-            bytes,
-            br#"{"schema_version":2,"pid":"1","kind":"exit","operation":"exit","path":null,"outcome":"+++ exited with 0 +++","evidence":{"file":"raw/trace.log","line":1,"end_line":1},"argv":null,"child_pid":null,"cwd_before":null,"context_uncertain":false}
-"#
-        );
-        assert_eq!(decode_events(&bytes).unwrap().len(), 1);
-
-        let temp = TestDir::new("events-wire-bytes");
-        let run_dir = temp.path().join("abc-1");
-        fs::create_dir(&run_dir).unwrap();
-        let metadata = completed_metadata_fixture("abc-1");
-        finish(&run_dir, &metadata, std::slice::from_ref(&event)).unwrap();
-        assert_eq!(fs::read(run_dir.join("events.jsonl")).unwrap(), bytes);
-        let metadata_bytes = serde_json::to_vec_pretty(&metadata).unwrap();
-        let expected_marker = Finalized {
-            schema_version: 1,
-            run_id: "abc-1".into(),
-            event_count: 1,
-            events: check(&bytes),
-            metadata: check(&metadata_bytes),
-        };
-        assert_eq!(
-            fs::read(run_dir.join("finalized.json")).unwrap(),
-            serde_json::to_vec_pretty(&expected_marker).unwrap()
-        );
-
-        let mut crlf = bytes.clone();
-        crlf.insert(crlf.len() - 1, b'\r');
-        assert_eq!(decode_events(&crlf).unwrap().len(), 1);
-
-        let invalid_utf8 = decode_events(b"{\"schema_version\":2}\xff")
-            .expect_err("whole-file UTF-8 validation precedes final-line validation");
-        assert!(
-            invalid_utf8
-                .to_string()
-                .contains("events.jsonl: invalid utf-8")
-        );
-
-        let incomplete = decode_events(br#"{"schema_version":2}"#)
-            .expect_err("a nonempty JSONL file must end in LF");
-        assert!(
-            incomplete
-                .to_string()
-                .contains("events.jsonl: incomplete final line")
-        );
-
-        let future = decode_events(b"{\"schema_version\":999}\n")
-            .expect_err("a future header precedes full DTO decoding");
-        assert_eq!(
-            storage_load_failure_kind(&future),
-            StorageLoadFailureKind::Unsupported
-        );
-    }
-
-    #[test]
-    fn streaming_event_readback_keeps_bytes_and_error_priority() {
-        let temp = TestDir::new("streaming-event-readback");
-        let path = temp.path().join("events.jsonl");
-        let read = |bytes: &[u8]| {
-            fs::write(&path, bytes).unwrap();
-            stream_event_readback(&mut fs::File::open(&path).unwrap()).unwrap()
-        };
-
-        let event = event_fixture(2);
-        let mut valid = serde_json::to_vec(&event).unwrap();
-        valid.push(b'\n');
-        let valid_readback = read(&valid);
-        assert_eq!(valid_readback.check, check(&valid));
-        assert_eq!(valid_readback.decoded.unwrap().facts.count, 1);
-
-        let invalid_utf8 = read(b"{\"schema_version\":999}\n\xff")
-            .decoded
-            .expect_err("whole-file UTF-8 failure precedes schema and final-line errors");
-        assert!(
-            invalid_utf8
-                .to_string()
-                .contains("events.jsonl: invalid utf-8")
-        );
-
-        let incomplete = read(b"not-json")
-            .decoded
-            .expect_err("an incomplete final line precedes DTO decoding");
-        assert!(incomplete.to_string().contains("incomplete final line"));
-
-        let future = read(b"{\"schema_version\":999}\n")
-            .decoded
-            .expect_err("a verified future header remains unsupported");
-        assert_eq!(
-            storage_load_failure_kind(&future),
-            StorageLoadFailureKind::Unsupported
-        );
-    }
-
-    #[test]
-    fn streaming_readback_rejects_a_replaced_published_path() {
-        let temp = TestDir::new("streaming-readback-swap");
-        let run = temp.path().join("run");
-        fs::create_dir(&run).unwrap();
-        let directory = open_directory(&run).unwrap();
-        let event = event_fixture(2);
-        let mut bytes = serde_json::to_vec(&event).unwrap();
-        bytes.push(b'\n');
-        let destination = run.join("events.jsonl");
-        fs::write(&destination, &bytes).unwrap();
-        let retained = fs::File::open(&destination).unwrap();
-        let published = PublishedFile {
-            file: retained,
-            stage: CommitStage::Durable,
-        };
-        let expected = EventFileSummary {
-            check: check(&bytes),
-            facts: EventFacts::from_events(std::slice::from_ref(&event)),
-        };
-
-        fs::rename(&destination, run.join("detached-events")).unwrap();
-        let sentinel = temp.path().join("outside-sentinel");
-        fs::write(&sentinel, b"outside remains").unwrap();
-        fs::hard_link(&sentinel, &destination).unwrap();
-
-        let error =
-            read_back_published_events(&directory, &published, &expected, AtomicControl::default())
-                .expect_err("the published component must still name the staged inode");
-        let failure = error
-            .downcast_ref::<CommitFailure>()
-            .expect("identity failures retain their atomic commit stage");
-        assert_eq!(failure.stage, CommitStage::Durable);
-        assert_eq!(fs::read(&sentinel).unwrap(), b"outside remains");
-        assert_eq!(fs::read(&destination).unwrap(), b"outside remains");
-        assert!(!run.join("finalized.json").exists());
-    }
-
-    #[test]
-    fn finalized_checksums_precede_metadata_and_event_decoding() {
-        let temp = TestDir::new("checksum-priority");
-        let run_dir = temp.path().join("abc-1");
-        fs::create_dir(&run_dir).unwrap();
-        let metadata = completed_metadata_fixture("abc-1");
-        let metadata_bytes = serde_json::to_vec_pretty(&metadata).unwrap();
-        let future_events = b"{\"schema_version\":999}\n";
-        fs::write(run_dir.join("metadata.json"), &metadata_bytes).unwrap();
-        fs::write(run_dir.join("events.jsonl"), future_events).unwrap();
-
-        let marker = |metadata_check, events_check| Finalized {
-            schema_version: 1,
-            run_id: metadata.id.clone(),
-            event_count: 1,
-            events: events_check,
-            metadata: metadata_check,
-        };
-        let write_marker = |marker: &Finalized| {
-            fs::write(
-                run_dir.join("finalized.json"),
-                serde_json::to_vec_pretty(marker).unwrap(),
-            )
-            .unwrap();
-        };
-
-        write_marker(&marker(check(&metadata_bytes), check(b"different events")));
-        let stale_events = read_run(run_dir.clone(), metadata.clone())
-            .expect_err("checksum mismatch must precede a future event header");
-        assert!(
-            stale_events
-                .to_string()
-                .contains("byte count or SHA-256 mismatch")
-        );
-        assert_eq!(
-            storage_load_failure_kind(&stale_events),
-            StorageLoadFailureKind::Corrupt
-        );
-
-        write_marker(&marker(check(&metadata_bytes), check(future_events)));
-        let verified_future = read_run(run_dir.clone(), metadata.clone())
-            .expect_err("the future event header is visible after checksum verification");
-        assert_eq!(
-            storage_load_failure_kind(&verified_future),
-            StorageLoadFailureKind::Unsupported
-        );
-
-        let future_metadata = br#"{"schema_version":999}"#;
-        fs::write(run_dir.join("metadata.json"), future_metadata).unwrap();
-        write_marker(&marker(check(b"different metadata"), check(future_events)));
-        let stale_metadata = read_run(run_dir.clone(), metadata.clone())
-            .expect_err("metadata checksum mismatch must precede its future header");
-        assert!(
-            stale_metadata
-                .to_string()
-                .contains("byte count or SHA-256 mismatch")
-        );
-        assert_eq!(
-            storage_load_failure_kind(&stale_metadata),
-            StorageLoadFailureKind::Corrupt
-        );
-
-        write_marker(&marker(check(future_metadata), check(b"different events")));
-        let stale_events_before_future_metadata = read_run(run_dir.clone(), metadata.clone())
-            .expect_err("events checksum verification precedes future metadata decoding");
-        assert!(
-            stale_events_before_future_metadata
-                .to_string()
-                .contains("events.jsonl: byte count or SHA-256 mismatch")
-        );
-
-        let invalid_metadata = b"{\"schema_version\":3,\xff}";
-        let invalid_events = b"\xff\n";
-        fs::write(run_dir.join("metadata.json"), invalid_metadata).unwrap();
-        fs::write(run_dir.join("events.jsonl"), invalid_events).unwrap();
-        write_marker(&marker(check(invalid_metadata), check(b"different events")));
-        let stale_events_before_metadata = read_run(run_dir.clone(), metadata.clone())
-            .expect_err("all finalized checksums precede metadata decoding");
-        assert!(
-            stale_events_before_metadata
-                .to_string()
-                .contains("events.jsonl: byte count or SHA-256 mismatch")
-        );
-
-        write_marker(&marker(check(invalid_metadata), check(invalid_events)));
-        let metadata_before_events = read_run(run_dir, metadata)
-            .expect_err("metadata decoding precedes event UTF-8 decoding after verification");
-        assert!(metadata_before_events.to_string().contains("metadata.json"));
-        assert_eq!(
-            storage_load_failure_kind(&metadata_before_events),
-            StorageLoadFailureKind::Corrupt
-        );
-    }
-
-    #[test]
-    fn finalized_metadata_errors_precede_event_decode_but_follow_all_checksums() {
-        let temp = TestDir::new("finalized-error-order");
-        let run_dir = temp.path().join("abc-1");
-        fs::create_dir(&run_dir).unwrap();
-        let metadata = metadata_fixture("abc-1");
-        let future_metadata = br#"{"schema_version":999}"#;
-        let invalid_events = b"\xff\n";
-        fs::write(run_dir.join("metadata.json"), future_metadata).unwrap();
-        fs::write(run_dir.join("events.jsonl"), invalid_events).unwrap();
-        let marker = Finalized {
-            schema_version: 1,
-            run_id: "abc-1".into(),
-            event_count: 1,
-            events: check(invalid_events),
-            metadata: check(future_metadata),
-        };
-        fs::write(
-            run_dir.join("finalized.json"),
-            serde_json::to_vec_pretty(&marker).unwrap(),
-        )
-        .unwrap();
-
-        let error = read_run(run_dir, metadata)
-            .expect_err("metadata schema is interpreted before event UTF-8 after verification");
-        assert_eq!(
-            storage_load_failure_kind(&error),
-            StorageLoadFailureKind::Unsupported
-        );
-        assert!(
-            error
-                .to_string()
-                .contains("unsupported metadata schema 999")
-        );
-    }
-
-    #[test]
-    fn marker_header_and_dto_precede_run_files_and_identity_checks() {
-        let temp = TestDir::new("marker-priority");
-        let run_dir = temp.path().join("abc-1");
-        fs::create_dir(&run_dir).unwrap();
-        let metadata = metadata_fixture("abc-1");
-
-        fs::write(run_dir.join("finalized.json"), br#"{"schema_version":999}"#).unwrap();
-        let future = read_run(run_dir.clone(), metadata.clone())
-            .expect_err("future marker header precedes missing run files");
-        assert_eq!(
-            storage_load_failure_kind(&future),
-            StorageLoadFailureKind::Unsupported
-        );
-
-        fs::write(run_dir.join("finalized.json"), br#"{"schema_version":1}"#).unwrap();
-        let incomplete = read_run(run_dir, metadata)
-            .expect_err("marker DTO completeness precedes missing run files");
-        assert_eq!(
-            storage_load_failure_kind(&incomplete),
-            StorageLoadFailureKind::Corrupt
-        );
-        assert!(incomplete.to_string().contains("finalized.json"));
-    }
-
-    #[test]
-    fn streaming_reader_checks_count_then_cross_file_contract() {
-        let temp = TestDir::new("streaming-count-contract");
-        let run_dir = temp.path().join("abc-1");
-        fs::create_dir(&run_dir).unwrap();
-        let metadata = completed_metadata_fixture("abc-1");
-        let metadata_bytes = serde_json::to_vec_pretty(&metadata).unwrap();
-        let event = event_fixture(2);
-        let mut event_bytes = serde_json::to_vec(&event).unwrap();
-        event_bytes.push(b'\n');
-        fs::write(run_dir.join("metadata.json"), &metadata_bytes).unwrap();
-        fs::write(run_dir.join("events.jsonl"), &event_bytes).unwrap();
-        let write_marker = |event_count, events: &FileCheck| {
-            let marker = Finalized {
-                schema_version: 1,
-                run_id: metadata.id.clone(),
-                event_count,
-                events: events.clone(),
-                metadata: check(&metadata_bytes),
-            };
-            fs::write(
-                run_dir.join("finalized.json"),
-                serde_json::to_vec_pretty(&marker).unwrap(),
-            )
-            .unwrap();
-        };
-
-        write_marker(2, &check(&event_bytes));
-        let count = read_run(run_dir.clone(), metadata.clone())
-            .expect_err("marker count must match the streamed DTO count");
-        assert!(count.to_string().contains("event count mismatch"));
-
-        let mut invalid_event = event;
-        invalid_event.evidence.end_line = 2;
-        let mut invalid_bytes = serde_json::to_vec(&invalid_event).unwrap();
-        invalid_bytes.push(b'\n');
-        fs::write(run_dir.join("events.jsonl"), &invalid_bytes).unwrap();
-        write_marker(1, &check(&invalid_bytes));
-        let contract = read_run(run_dir, metadata)
-            .expect_err("verified DTOs must still satisfy the cross-file evidence contract");
-        assert!(contract.to_string().contains("run contract"));
-        assert!(contract.to_string().contains("evidence lines"));
-    }
-
-    #[test]
-    fn index_hints_never_override_finalized_checksum_priority() {
-        let temp = TestDir::new("index-checksum-priority");
-        let root = temp.path().join("storage");
-        let storage = open(&root).unwrap();
-        let run_dir = root.join("runs/abc-1");
-        fs::create_dir(&run_dir).unwrap();
-        let speculative = br#"{"schema_version":999,"name":"priority-label"}"#;
-        fs::write(run_dir.join("metadata.json"), speculative).unwrap();
-        fs::write(run_dir.join("events.jsonl"), b"").unwrap();
-        let marker = Finalized {
-            schema_version: 1,
-            run_id: "abc-1".into(),
-            event_count: 0,
-            events: check(b""),
-            metadata: check(b"different metadata"),
-        };
-        fs::write(
-            run_dir.join("finalized.json"),
-            serde_json::to_vec_pretty(&marker).unwrap(),
-        )
-        .unwrap();
-
-        let error = storage
-            .load("priority-label")
-            .expect_err("the label hint may select, but cannot validate, a record");
-        assert_eq!(
-            storage_load_failure_kind(&error),
-            StorageLoadFailureKind::Corrupt
-        );
-        assert!(format!("{error:#}").contains("byte count or SHA-256 mismatch"));
-        match storage.records().unwrap().as_slice() {
-            [
-                RecordSummary::Unreadable {
-                    name,
-                    storage_integrity,
-                    ..
-                },
-            ] => {
-                assert_eq!(name.as_deref(), Some("priority-label"));
-                assert_eq!(storage_integrity.status, "corrupt");
-                assert!(
-                    storage_integrity
-                        .detail
-                        .contains("byte count or SHA-256 mismatch")
-                );
-            }
-            _ => panic!("the damaged row must remain isolated and retain its index hint"),
-        }
-    }
-
-    #[test]
-    fn atomic_replace_faults_report_the_exact_publish_stage_and_clean_staging() {
-        let temp = TestDir::new("atomic-faults");
-        let path = temp.path().join("run");
-        fs::create_dir(&path).unwrap();
-        let directory = open_directory(&path).unwrap();
-        let target = path.join("payload");
-        let unrelated = path.join(".rundelta-tmp-preexisting");
-        fs::write(&unrelated, b"do not touch").unwrap();
-        let expected_staging = vec![".rundelta-tmp-preexisting".to_owned()];
-
-        for step in [AtomicStep::Write, AtomicStep::FileSync, AtomicStep::Rename] {
-            fs::write(&target, b"old").unwrap();
-            let error = atomic_replace_with_control(
-                &directory,
-                "payload",
-                b"new",
-                AtomicControl {
-                    fail: Some(("payload", step)),
-                    force_named_fallback: true,
-                    force_link_unsupported: false,
-                },
-            )
-            .unwrap_err();
-            assert_eq!(error.stage, CommitStage::BeforePublish, "{step:?}");
-            assert_eq!(fs::read(&target).unwrap(), b"old", "{step:?}");
-            assert_eq!(staging_entries(&path), expected_staging, "{step:?}");
-            assert_eq!(fs::read(&unrelated).unwrap(), b"do not touch");
-        }
-
-        let error = atomic_replace_with_control(
-            &directory,
-            "payload",
-            b"published",
-            AtomicControl {
-                fail: Some(("payload", AtomicStep::DirectorySync)),
-                force_named_fallback: true,
-                force_link_unsupported: false,
-            },
-        )
-        .unwrap_err();
-        assert_eq!(error.stage, CommitStage::PublishedDurabilityUnknown);
-        assert_eq!(fs::read(&target).unwrap(), b"published");
-        assert!(error.to_string().contains("was published"));
-        assert_eq!(staging_entries(&path), expected_staging);
-
-        assert_eq!(
-            atomic_replace_with_control(
-                &directory,
-                "payload",
-                b"durable",
-                AtomicControl {
-                    fail: None,
-                    force_named_fallback: true,
-                    force_link_unsupported: false,
-                },
-            )
-            .unwrap(),
-            CommitStage::Durable
-        );
-        assert_eq!(fs::read(&target).unwrap(), b"durable");
-        assert_eq!(staging_entries(&path), expected_staging);
-
-        // The production path attempts O_TMPFILE first and safely falls back on
-        // filesystems whose anonymous files cannot be linked.
-        assert_eq!(
-            atomic_replace_with_control(
-                &directory,
-                "anonymous-or-fallback",
-                b"bytes",
-                AtomicControl::default(),
-            )
-            .unwrap(),
-            CommitStage::Durable
-        );
-        assert_eq!(
-            fs::read(path.join("anonymous-or-fallback")).unwrap(),
-            b"bytes"
-        );
-        assert_eq!(staging_entries(&path), expected_staging);
-    }
-
-    #[test]
-    fn anonymous_link_fallback_copies_in_bounded_chunks_and_cleans_exactly() {
-        let temp = TestDir::new("atomic-anonymous-copy");
-        let directory = open_directory(temp.path()).unwrap();
-        let mut source = create_staging(&directory, false).unwrap();
-        if let Some(name) = source.name.take() {
-            // Filesystems without O_TMPFILE first return the production named
-            // fallback. Unlink exactly that entry while retaining its fd so
-            // the rest of this test still starts from a true anonymous inode.
-            unlink_at(&directory, &name, 0).unwrap();
-        }
-        assert_eq!(file_stat(&source.file).unwrap().st_nlink, 0);
-        let contents = (0..(192 * 1024 + 17))
-            .map(|index| (index % 251) as u8)
-            .collect::<Vec<_>>();
-        source.file.write_all(&contents).unwrap();
-
-        for step in [AtomicStep::FallbackCopy, AtomicStep::FallbackFileSync] {
-            let error = copy_anonymous_to_named(
-                &mut source,
-                "payload",
-                AtomicControl {
-                    fail: Some(("payload", step)),
-                    force_named_fallback: false,
-                    force_link_unsupported: false,
-                },
-            )
-            .err()
-            .expect("the injected fallback fault must be reported");
-            assert_eq!(error.stage, CommitStage::BeforePublish);
-            assert!(staging_entries(temp.path()).is_empty(), "{step:?}");
-            assert_eq!(file_stat(&source.file).unwrap().st_nlink, 0, "{step:?}");
-        }
-
-        let mut copied =
-            copy_anonymous_to_named(&mut source, "payload", AtomicControl::default()).unwrap();
-        copied.file.seek(SeekFrom::Start(0)).unwrap();
-        let mut actual = Vec::new();
-        copied.file.read_to_end(&mut actual).unwrap();
-        assert_eq!(actual, contents);
-        assert_eq!(staging_entries(temp.path()).len(), 1);
-        drop(copied);
-        assert!(staging_entries(temp.path()).is_empty());
-        assert_eq!(file_stat(&source.file).unwrap().st_nlink, 0);
-
-        let published = AtomicStaging {
-            staged: source,
-            published: CString::new("payload").unwrap(),
-            display: "payload",
-            control: AtomicControl {
-                fail: None,
-                force_named_fallback: false,
-                force_link_unsupported: true,
-            },
-        }
-        .publish()
-        .unwrap();
-        assert_eq!(published.stage, CommitStage::Durable);
-        assert_eq!(fs::read(temp.path().join("payload")).unwrap(), contents);
-        assert!(staging_entries(temp.path()).is_empty());
-    }
-
-    #[test]
-    fn staging_cleanup_is_idempotent_and_only_unlinks_its_exact_name() {
-        let temp = TestDir::new("atomic-cleanup");
-        let directory = open_directory(temp.path()).unwrap();
-        let sentinel = temp.path().join(".rundelta-tmp-unrelated");
-        fs::write(&sentinel, b"keep").unwrap();
-        let mut staged = create_named_staging(&directory).unwrap();
-        let staged_name = staged.name.as_ref().unwrap().to_bytes().to_vec();
-        assert!(temp.path().join(crate::model::bytes(&staged_name)).exists());
-
-        staged.cleanup().unwrap();
-        staged.cleanup().unwrap();
-
-        assert!(!temp.path().join(crate::model::bytes(&staged_name)).exists());
-        assert_eq!(fs::read(&sentinel).unwrap(), b"keep");
-    }
-
-    #[test]
-    fn staging_identity_check_rejects_a_replaced_name_before_publish() {
-        let temp = TestDir::new("atomic-staging-swap");
-        let directory = open_directory(temp.path()).unwrap();
-        let destination = temp.path().join("payload");
-        let sentinel = temp.path().join("outside-sentinel");
-        fs::write(&destination, b"old destination").unwrap();
-        fs::write(&sentinel, b"outside stays unchanged").unwrap();
-
-        let mut staged = create_named_staging(&directory).unwrap();
-        staged.file.write_all(b"new staged bytes").unwrap();
-        staged.file.sync_all().unwrap();
-        let staging_name = staged.name.as_ref().unwrap().to_bytes().to_vec();
-        let staging_path = temp.path().join(crate::model::bytes(&staging_name));
-        fs::remove_file(&staging_path).unwrap();
-        fs::hard_link(&sentinel, &staging_path).unwrap();
-
-        let error = verify_staging_for_publish(&staged, "payload")
-            .expect_err("a replaced staging entry must not be published");
-        assert_eq!(error.stage, CommitStage::BeforePublish);
-        assert_eq!(error.source.kind(), std::io::ErrorKind::InvalidData);
-        drop(staged);
-
-        assert_eq!(fs::read(&destination).unwrap(), b"old destination");
-        assert_eq!(fs::read(&sentinel).unwrap(), b"outside stays unchanged");
-        assert!(!staging_path.exists());
-    }
-
-    #[test]
-    fn only_materializing_an_unnamed_tmpfile_treats_enoent_as_fallback() {
-        let error = std::io::Error::from_raw_os_error(libc::ENOENT);
-        assert!(tmpfile_link_is_unsupported(&error));
-        assert!(!tmpfile_is_unsupported(&error));
-    }
-
-    #[test]
-    fn finalization_faults_distinguish_durable_readback_from_published_marker() {
-        let event = event_fixture(2);
-
-        let readback_temp = TestDir::new("readback-fault");
-        let readback_run = readback_temp.path().join("abc-1");
-        fs::create_dir(&readback_run).unwrap();
-        let readback_directory = open_directory(&readback_run).unwrap();
-        let metadata = completed_metadata_fixture("abc-1");
-        let error = finish_at_with_control(
-            &readback_directory,
-            &metadata,
-            std::slice::from_ref(&event),
-            AtomicControl {
-                fail: Some(("events.jsonl", AtomicStep::ReadBack)),
-                force_named_fallback: true,
-                force_link_unsupported: false,
-            },
-        )
-        .unwrap_err();
-        assert_eq!(commit_failure(&error).stage, CommitStage::Durable);
-        assert!(readback_run.join("events.jsonl").is_file());
-        assert!(!readback_run.join("finalized.json").exists());
-        assert!(staging_entries(&readback_run).is_empty());
-
-        let marker_temp = TestDir::new("marker-dirsync-fault");
-        let marker_run = marker_temp.path().join("abc-1");
-        fs::create_dir(&marker_run).unwrap();
-        let marker_directory = open_directory(&marker_run).unwrap();
-        let error = finish_at_with_control(
-            &marker_directory,
-            &metadata,
-            std::slice::from_ref(&event),
-            AtomicControl {
-                fail: Some(("finalized.json", AtomicStep::DirectorySync)),
-                force_named_fallback: true,
-                force_link_unsupported: false,
-            },
-        )
-        .unwrap_err();
-        let failure = commit_failure(&error);
-        assert_eq!(failure.stage, CommitStage::PublishedDurabilityUnknown);
-        assert!(failure.to_string().contains("was published"));
-        assert!(marker_run.join("finalized.json").is_file());
-        assert_eq!(
-            read_run(marker_run.clone(), metadata.clone())
-                .unwrap()
-                .storage_integrity
-                .status,
-            "verified"
-        );
-        assert!(staging_entries(&marker_run).is_empty());
-
-        // Retrying through the same protocol replaces the published files and
-        // reaches Durable without depending on rollback of the earlier marker.
-        finish_at_with_control(
-            &marker_directory,
-            &metadata,
-            &[event],
-            AtomicControl {
-                fail: None,
-                force_named_fallback: true,
-                force_link_unsupported: false,
-            },
-        )
-        .unwrap();
-        assert!(staging_entries(&marker_run).is_empty());
-    }
-
-    #[test]
-    fn current_contract_accepts_each_real_writer_state_and_opaque_raw_outcomes() {
-        let event = event_fixture(2);
-        let running = metadata_fixture("abc-1");
-        validate_metadata_contract(&running).unwrap();
-
-        let completed = completed_metadata_fixture("abc-1");
-        validate_run_contract(&completed, std::slice::from_ref(&event), true).unwrap();
-
-        let mut partial = completed.clone();
-        partial.exit_code = None;
-        partial.completeness = Some("partial".into());
-        partial.target_exit_raw = Some("+++ killed by SIG_FUTURE +++".into());
-        partial.warnings = vec!["unrecognized target termination signal".into()];
-        validate_run_contract(&partial, std::slice::from_ref(&event), true).unwrap();
-
-        let mut failed = completed.clone();
-        failed.state = "capture_failed".into();
-        failed.completeness = Some("incomplete".into());
-        failed.warnings = vec!["collector status does not confirm target completion".into()];
-        validate_run_contract(&failed, std::slice::from_ref(&event), true).unwrap();
-
-        let mut interrupted = completed;
-        interrupted.state = "interrupted".into();
-        interrupted.completeness = Some("incomplete".into());
-        validate_run_contract(&interrupted, &[event], true).unwrap();
-    }
-
-    #[test]
-    fn metadata_contract_rejects_outcome_state_and_writer_fact_contradictions() {
-        let completed = completed_metadata_fixture("abc-1");
-        let mut cases = Vec::new();
-
-        let mut target_both = completed.clone();
-        target_both.signal = Some(9);
-        cases.push(("target outcome", target_both));
-
-        let mut collector_both = completed.clone();
-        collector_both.collector_signal = Some(9);
-        cases.push(("collector outcome", collector_both));
-
-        let mut running_ended = metadata_fixture("abc-1");
-        running_ended.ended = Some(2);
-        cases.push(("running ended", running_ended));
-
-        let mut running_pending = metadata_fixture("abc-1");
-        running_pending.completeness = Some("partial".into());
-        cases.push(("running completeness", running_pending));
-
-        let mut running_outcome = metadata_fixture("abc-1");
-        running_outcome.exit_code = Some(0);
-        running_outcome.target_exit_raw = Some("opaque".into());
-        cases.push(("running outcome", running_outcome));
-
-        let mut completed_pending = completed.clone();
-        completed_pending.completeness = Some("pending".into());
-        cases.push(("completed completeness", completed_pending));
-
-        let mut completed_without_end = completed.clone();
-        completed_without_end.ended = None;
-        cases.push(("completed end", completed_without_end));
-
-        let mut structured_without_raw = completed.clone();
-        structured_without_raw.target_exit_raw = None;
-        cases.push(("structured target without raw", structured_without_raw));
-
-        let mut complete_with_warning = completed.clone();
-        complete_with_warning.warnings.push("limitation".into());
-        cases.push(("complete warning", complete_with_warning));
-
-        let mut complete_without_target = completed.clone();
-        complete_without_target.exit_code = None;
-        complete_without_target.target_exit_raw = Some("opaque unknown".into());
-        cases.push(("complete target confirmation", complete_without_target));
-
-        let mut complete_mismatch = completed.clone();
-        complete_mismatch.collector_exit_code = Some(7);
-        cases.push(("complete collector confirmation", complete_mismatch));
-
-        let mut partial_without_limitation = completed.clone();
-        partial_without_limitation.completeness = Some("partial".into());
-        cases.push(("partial limitation", partial_without_limitation));
-
-        let mut partial_without_raw = completed.clone();
-        partial_without_raw.completeness = Some("partial".into());
-        partial_without_raw.warnings = vec!["unknown target outcome".into()];
-        partial_without_raw.exit_code = None;
-        partial_without_raw.target_exit_raw = None;
-        cases.push(("partial raw target", partial_without_raw));
-
-        let mut partial_without_collector = completed.clone();
-        partial_without_collector.completeness = Some("partial".into());
-        partial_without_collector.warnings = vec!["unknown target outcome".into()];
-        partial_without_collector.exit_code = None;
-        partial_without_collector.collector_exit_code = None;
-        cases.push(("partial collector outcome", partial_without_collector));
-
-        let mut failed_complete = completed.clone();
-        failed_complete.state = "capture_failed".into();
-        failed_complete.warnings = vec!["failure".into()];
-        cases.push(("failed completeness", failed_complete));
-
-        let mut failed_without_warning = completed.clone();
-        failed_without_warning.state = "capture_failed".into();
-        failed_without_warning.completeness = Some("incomplete".into());
-        cases.push(("failed warning", failed_without_warning));
-
-        let mut interrupted_complete = completed.clone();
-        interrupted_complete.state = "interrupted".into();
-        cases.push(("interrupted completeness", interrupted_complete));
-
-        let mut empty_command = completed.clone();
-        empty_command.command.clear();
-        cases.push(("empty command", empty_command));
-
-        let mut bad_name = completed.clone();
-        bad_name.name = "bad\nname".into();
-        cases.push(("bad name", bad_name));
-
-        let mut bad_environment = completed.clone();
-        bad_environment
-            .environment
-            .as_mut()
-            .unwrap()
-            .insert("BAD=KEY".into(), None);
-        cases.push(("bad environment", bad_environment));
-
-        let mut unknown_state = completed;
-        unknown_state.state = "future_state".into();
-        cases.push(("unknown state", unknown_state));
-
-        let mut unknown_completeness = completed_metadata_fixture("abc-1");
-        unknown_completeness.completeness = Some("future_completeness".into());
-        cases.push(("unknown completeness", unknown_completeness));
-
-        for (label, metadata) in cases {
-            assert!(
-                validate_metadata_contract(&metadata).is_err(),
-                "{label} must fail closed"
-            );
-        }
-    }
-
-    #[test]
-    fn run_contract_rejects_count_coordinate_and_completeness_contradictions() {
-        let metadata = completed_metadata_fixture("abc-1");
-        let event = event_fixture(2);
-
-        let mut wrong_count = metadata.clone();
-        wrong_count.parsed_events = 2;
-        assert!(validate_run_contract(&wrong_count, std::slice::from_ref(&event), true).is_err());
-
-        for (label, line, end_line, raw_lines) in [
-            ("zero line", 0, 1, 1),
-            ("reversed range", 2, 1, 2),
-            ("past raw trace", 1, 2, 1),
-        ] {
-            let mut invalid = event.clone();
-            invalid.evidence.line = line;
-            invalid.evidence.end_line = end_line;
-            let mut metadata = metadata.clone();
-            metadata.raw_lines = raw_lines;
-            assert!(
-                validate_run_contract(&metadata, &[invalid], true).is_err(),
-                "{label} must fail closed"
-            );
-        }
-
-        let mut uncertain = event;
-        uncertain.context_uncertain = true;
-        assert!(validate_run_contract(&metadata, &[uncertain], true).is_err());
-    }
-
-    #[test]
-    fn legacy_contract_checks_only_objective_outcome_count_and_coordinates() {
-        let mut legacy = completed_metadata_fixture("abc-1");
-        legacy.schema_version = 1;
-        legacy.environment = None;
-        legacy.completeness = None;
-        legacy.warnings = vec!["legacy free-form warning".into()];
-        let event = event_fixture(1);
-        validate_run_contract(&legacy, std::slice::from_ref(&event), false).unwrap();
-
-        let mut contradictory = legacy.clone();
-        contradictory.signal = Some(9);
-        assert!(validate_metadata_contract(&contradictory).is_err());
-
-        let mut wrong_count = legacy.clone();
-        wrong_count.parsed_events = 2;
-        assert!(validate_run_contract(&wrong_count, std::slice::from_ref(&event), false).is_err());
-
-        let mut invalid_evidence = event;
-        invalid_evidence.evidence.end_line = 2;
-        assert!(validate_run_contract(&legacy, &[invalid_evidence], false).is_err());
-    }
-
-    #[test]
-    fn future_headers_are_unsupported_before_current_dto_fields_are_decoded() {
-        for error in [
-            decode_metadata(br#"{"schema_version":999}"#, "abc-1").unwrap_err(),
-            decode_events(b"{\"schema_version\":999}\n").unwrap_err(),
-            decode_finalized(br#"{"schema_version":999}"#)
-                .err()
-                .expect("future marker must fail"),
-        ] {
-            assert_eq!(
-                storage_load_failure_kind(&error),
-                StorageLoadFailureKind::Unsupported,
-                "{error:#}"
-            );
-        }
-
-        for error in [
-            decode_metadata(br#"{"schema_version":3}"#, "abc-1").unwrap_err(),
-            decode_events(b"{\"schema_version\":2}\n").unwrap_err(),
-            decode_finalized(br#"{"schema_version":1}"#)
-                .err()
-                .expect("incomplete current marker must fail"),
-        ] {
-            assert_eq!(
-                storage_load_failure_kind(&error),
-                StorageLoadFailureKind::Corrupt,
-                "{error:#}"
-            );
-        }
-    }
-
-    #[test]
-    fn unknown_current_wire_state_values_are_corrupt_after_typed_conversion() {
-        for (state, completeness) in [
-            ("future_state", "complete_for_supported_events"),
-            ("completed", "future_completeness"),
-        ] {
-            let mut metadata = completed_metadata_fixture("abc-1");
-            metadata.state = state.into();
-            metadata.completeness = Some(completeness.into());
-            let error = decode_metadata(&serde_json::to_vec(&metadata).unwrap(), "abc-1")
-                .expect_err("unknown wire enum values must fail closed");
-            assert_eq!(
-                storage_load_failure_kind(&error),
-                StorageLoadFailureKind::Corrupt,
-                "{error:#}"
-            );
-        }
-    }
-
-    #[test]
-    fn marker_run_id_contradiction_is_corrupt_not_unsupported() {
-        let temp = TestDir::new("marker-run-id");
-        let directory = temp.path().join("abc-1");
-        fs::create_dir(&directory).unwrap();
-        let marker = Finalized {
-            schema_version: 1,
-            run_id: "other-2".into(),
-            event_count: 0,
-            events: check(&[]),
-            metadata: check(&[]),
-        };
-        fs::write(
-            directory.join("finalized.json"),
-            serde_json::to_vec(&marker).unwrap(),
-        )
-        .unwrap();
-
-        let error = read_run(directory, metadata_fixture("abc-1")).unwrap_err();
-        assert_eq!(
-            storage_load_failure_kind(&error),
-            StorageLoadFailureKind::Corrupt,
-            "{error:#}"
-        );
-        assert!(error.to_string().contains("run ID"));
-    }
-
-    #[test]
-    fn errno_mapping_reserves_busy_for_flock_contention() {
-        for errno in [libc::EAGAIN, libc::EWOULDBLOCK] {
-            let error = lock_error(std::io::Error::from_raw_os_error(errno));
-            assert!(matches!(storage_error(&error), StorageError::Busy(_)));
-        }
-        for errno in [libc::ENOLCK, libc::EPERM, libc::EMFILE, libc::EACCES] {
-            let error = lock_error(std::io::Error::from_raw_os_error(errno));
-            assert!(matches!(
-                storage_error(&error),
-                StorageError::Unavailable {
-                    source: Some(_),
-                    ..
-                }
-            ));
-        }
-        let synthetic = lock_error(std::io::Error::new(
-            std::io::ErrorKind::WouldBlock,
-            "not an errno",
-        ));
-        assert!(matches!(
-            storage_error(&synthetic),
-            StorageError::Unavailable { .. }
-        ));
-    }
-
-    #[test]
-    fn concrete_storage_errors_map_to_neutral_load_outcomes() {
-        let failures: Vec<(anyhow::Error, StorageLoadFailureKind, &str)> = vec![
-            (
-                StorageError::Corrupt("bad bytes".into()).into(),
-                StorageLoadFailureKind::Corrupt,
-                "corrupt record: bad bytes",
-            ),
-            (
-                StorageError::Unsupported("future schema".into()).into(),
-                StorageLoadFailureKind::Unsupported,
-                "future schema",
-            ),
-            (
-                StorageError::Unavailable {
-                    message: "read metadata".into(),
-                    source: Some(std::io::Error::from_raw_os_error(libc::EMFILE)),
-                }
-                .into(),
-                StorageLoadFailureKind::Unavailable,
-                "read metadata",
-            ),
-            (
-                StorageError::Busy("storage busy".into()).into(),
-                StorageLoadFailureKind::Busy,
-                "storage busy",
-            ),
-            (
-                anyhow::anyhow!("non-storage tool failure"),
-                StorageLoadFailureKind::Unavailable,
-                "non-storage tool failure",
-            ),
-        ];
-        for (error, kind, message) in failures {
-            let failure = neutral_load_failure(error);
-            assert_eq!(failure.kind, kind);
-            assert!(failure.message.contains(message), "{}", failure.message);
-        }
-
-        let temp = TestDir::new("neutral-load-outcome");
-        let root = temp.path().join("storage");
-        open(&root).unwrap();
-        create_current_record(&root, "abc-1", "readable");
-        assert!(matches!(
-            load_outcome(&root, "readable"),
-            LoadOutcome::Loaded(_)
-        ));
-        match load_outcome(&root, "missing") {
-            LoadOutcome::Failed(failure) => {
-                assert_eq!(failure.kind, StorageLoadFailureKind::Unavailable);
-                assert!(failure.message.contains("expected one safe ID/label match"));
-            }
-            LoadOutcome::Loaded(_) => panic!("missing record unexpectedly loaded"),
-        }
-    }
-
-    #[test]
-    fn required_file_io_distinguishes_damage_from_resource_unavailability() {
-        let missing = required_record_file_error(
-            "metadata.json",
-            std::io::Error::from(std::io::ErrorKind::NotFound),
-        );
-        assert_eq!(
-            storage_load_failure_kind(&missing),
-            StorageLoadFailureKind::Corrupt
-        );
-
-        for errno in [libc::EACCES, libc::EMFILE] {
-            let error = required_record_file_error(
-                "metadata.json",
-                std::io::Error::from_raw_os_error(errno),
-            );
-            assert!(matches!(
-                storage_error(&error),
-                StorageError::Unavailable {
-                    source: Some(_),
-                    ..
-                }
-            ));
-            assert_eq!(
-                storage_load_failure_kind(&error),
-                StorageLoadFailureKind::Unavailable
-            );
-        }
-    }
-}
+mod identity_tests;

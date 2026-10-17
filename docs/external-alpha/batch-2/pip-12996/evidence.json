@@ -1,0 +1,104 @@
+{
+  "key_clues": [
+    {
+      "name": "override_config_opened",
+      "rank": 2,
+      "required": true,
+      "observations": [
+        {
+          "side": "right",
+          "role": "root",
+          "event": {
+            "kind": "file",
+            "operation": "openat",
+            "path": "${CASE}/override.conf",
+            "outcome": "success",
+            "context_uncertain": false,
+            "evidence": {
+              "file": "raw/trace.log",
+              "line": 462,
+              "end_line": 462
+            }
+          },
+          "raw_semantics_verified": true
+        },
+        {
+          "side": "right",
+          "role": "root",
+          "event": {
+            "kind": "file",
+            "operation": "openat",
+            "path": "${CASE}/override.conf",
+            "outcome": "success",
+            "context_uncertain": false,
+            "evidence": {
+              "file": "raw/trace.log",
+              "line": 488,
+              "end_line": 488
+            }
+          },
+          "raw_semantics_verified": true
+        }
+      ]
+    },
+    {
+      "name": "user_config_no_longer_observed",
+      "rank": 3,
+      "required": true,
+      "observations": [
+        {
+          "side": "left",
+          "role": "root",
+          "event": {
+            "kind": "file",
+            "operation": "openat",
+            "path": "${CASE}/home/.config/pip/pip.conf",
+            "outcome": "success",
+            "context_uncertain": false,
+            "evidence": {
+              "file": "raw/trace.log",
+              "line": 462,
+              "end_line": 462
+            }
+          },
+          "raw_semantics_verified": true
+        },
+        {
+          "side": "left",
+          "role": "root",
+          "event": {
+            "kind": "file",
+            "operation": "openat",
+            "path": "${CASE}/home/.config/pip/pip.conf",
+            "outcome": "success",
+            "context_uncertain": false,
+            "evidence": {
+              "file": "raw/trace.log",
+              "line": 488,
+              "end_line": 488
+            }
+          },
+          "raw_semantics_verified": true
+        },
+        {
+          "side": "left",
+          "role": "root",
+          "event": {
+            "kind": "file",
+            "operation": "openat",
+            "path": "${CASE}/home/.config/pip/pip.conf",
+            "outcome": "success",
+            "context_uncertain": false,
+            "evidence": {
+              "file": "raw/trace.log",
+              "line": 490,
+              "end_line": 490
+            }
+          },
+          "raw_semantics_verified": true
+        }
+      ]
+    }
+  ],
+  "other_observations": []
+}

@@ -1,3 +1,2 @@
-/target/
-*.crate
-__pycache__/
+/target
+/.idea/

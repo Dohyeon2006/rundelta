@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "purpose": "Authorized CWD warning contract repair; no ranking/input/score changes; immutable v1 audit retained",
+  "v1_audit_archive": "tests/fixtures/field_report_audit_v1.py",
+  "sha256": {
+    "tests/field_report_audit.py": "975376ebd1b9164e0174f90cc76f696a5f7abec9294e95b1424e36caab3a1415",
+    "tests/field_warning_contract.py": "fdb4eb3b8871e319e63c2d60588cfe69d7e1de587b10ba458f16b39b71d5745d",
+    "tests/test_field_warning_contract.py": "c781408e2cf8c037c4fa0a5243286b717c8ee73f8b79bc79e754463ff31c489d",
+    "tests/field_warning_mutations.py": "8b433c1cdafaa37e6543f68e33ff806ff288bacf63b8f668b4df7d16affba495"
+  }
+}

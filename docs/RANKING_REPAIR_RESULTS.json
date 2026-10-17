@@ -1,0 +1,714 @@
+{
+  "workdir": "<REDACTED_WORKDIR>",
+  "strict_top5_hits": 5,
+  "cases": [
+    {
+      "case": "python-venv",
+      "first_useful_rank": 2,
+      "total_changes": 106,
+      "control_changes": 0,
+      "folded_control": 0,
+      "control_display_entries": 0,
+      "reliability": {
+        "left": {
+          "capture": "complete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "complete",
+          "storage": "verified"
+        }
+      },
+      "diff_exit_code": 1,
+      "top5": [
+        {
+          "category": "Exit status",
+          "subject": "",
+          "detail_group": null,
+          "left": [
+            "code=Some(0), signal=None"
+          ],
+          "right": [
+            "code=Some(1), signal=None"
+          ],
+          "left_evidence": [],
+          "right_evidence": []
+        },
+        {
+          "category": "Executable changes",
+          "subject": "<REDACTED_PATH> (execve)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 1,
+              "end_line": 1
+            }
+          ]
+        },
+        {
+          "category": "New file access",
+          "subject": "<REDACTED_PATH> (openat)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 22,
+              "end_line": 22
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 24,
+              "end_line": 24
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 27,
+              "end_line": 27
+            }
+          ]
+        },
+        {
+          "category": "New file access",
+          "subject": "<REDACTED_PATH> (openat)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 21,
+              "end_line": 21
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 23,
+              "end_line": 23
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 26,
+              "end_line": 26
+            }
+          ]
+        },
+        {
+          "category": "New file access",
+          "subject": "<REDACTED_PATH> (openat)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 9,
+              "end_line": 9
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 20,
+              "end_line": 20
+            }
+          ]
+        }
+      ],
+      "runs": {
+        "good": {
+          "id": "18d6b550f45aa535-19755",
+          "exit_code": 0,
+          "warnings": [],
+          "events": 190
+        },
+        "repeat": {
+          "id": "18d6b551045f9d0e-19801",
+          "exit_code": 0,
+          "warnings": [],
+          "events": 190
+        },
+        "bad": {
+          "id": "18d6b5510aaea016-19868",
+          "exit_code": 1,
+          "warnings": [],
+          "events": 69
+        }
+      }
+    },
+    {
+      "case": "pkg-config",
+      "first_useful_rank": 2,
+      "total_changes": 7,
+      "control_changes": 0,
+      "folded_control": 0,
+      "control_display_entries": 0,
+      "reliability": {
+        "left": {
+          "capture": "complete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "complete",
+          "storage": "verified"
+        }
+      },
+      "diff_exit_code": 1,
+      "top5": [
+        {
+          "category": "Exit status",
+          "subject": "",
+          "detail_group": null,
+          "left": [
+            "code=Some(0), signal=None"
+          ],
+          "right": [
+            "code=Some(1), signal=None"
+          ],
+          "left_evidence": [],
+          "right_evidence": []
+        },
+        {
+          "category": "New file access",
+          "subject": "<REDACTED_PATH> (openat)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 89,
+              "end_line": 89
+            }
+          ]
+        },
+        {
+          "category": "Removed file access",
+          "subject": "/usr/lib64/pkgconfig (openat)",
+          "detail_group": null,
+          "left": [
+            "success"
+          ],
+          "right": [],
+          "left_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 89,
+              "end_line": 89
+            }
+          ],
+          "right_evidence": []
+        },
+        {
+          "category": "Removed file access",
+          "subject": "/usr/lib64/pkgconfig/libcrypt.pc (openat)",
+          "detail_group": null,
+          "left": [
+            "success"
+          ],
+          "right": [],
+          "left_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 88,
+              "end_line": 88
+            }
+          ],
+          "right_evidence": []
+        },
+        {
+          "category": "New file access",
+          "subject": "<REDACTED_PATH> (openat)",
+          "detail_group": "One-sided unsuccessful file accesses (not necessarily faults)",
+          "left": [],
+          "right": [
+            "ENOENT"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 87,
+              "end_line": 87
+            }
+          ]
+        }
+      ],
+      "runs": {
+        "good": {
+          "id": "18d6b5511034227c-19930",
+          "exit_code": 0,
+          "warnings": [],
+          "events": 89
+        },
+        "repeat": {
+          "id": "18d6b55114d952e3-19958",
+          "exit_code": 0,
+          "warnings": [],
+          "events": 89
+        },
+        "bad": {
+          "id": "18d6b55117ad79bc-20012",
+          "exit_code": 1,
+          "warnings": [],
+          "events": 89
+        }
+      }
+    },
+    {
+      "case": "git-identity",
+      "first_useful_rank": 2,
+      "total_changes": 41,
+      "control_changes": 8,
+      "folded_control": 3,
+      "control_display_entries": 7,
+      "reliability": {
+        "left": {
+          "capture": "complete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "complete",
+          "storage": "verified"
+        }
+      },
+      "diff_exit_code": 1,
+      "top5": [
+        {
+          "category": "Exit status",
+          "subject": "",
+          "detail_group": null,
+          "left": [
+            "code=Some(0), signal=None"
+          ],
+          "right": [
+            "code=Some(128), signal=None"
+          ],
+          "left_evidence": [],
+          "right_evidence": []
+        },
+        {
+          "category": "File access outcome changes",
+          "subject": "<REDACTED_PATH> (access)",
+          "detail_group": null,
+          "left": [
+            "success"
+          ],
+          "right": [
+            "ENOENT"
+          ],
+          "left_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 9,
+              "end_line": 9
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 16,
+              "end_line": 16
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 22,
+              "end_line": 22
+            }
+          ],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 9,
+              "end_line": 9
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 15,
+              "end_line": 15
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 20,
+              "end_line": 20
+            }
+          ]
+        },
+        {
+          "category": "Executable changes",
+          "subject": "/usr/libexec/git-core/git (execve)",
+          "detail_group": null,
+          "left": [
+            "success"
+          ],
+          "right": [],
+          "left_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 76,
+              "end_line": 76
+            }
+          ],
+          "right_evidence": []
+        },
+        {
+          "category": "Removed file access",
+          "subject": "/etc/localtime (openat)",
+          "detail_group": null,
+          "left": [
+            "success"
+          ],
+          "right": [],
+          "left_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 39,
+              "end_line": 39
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 133,
+              "end_line": 133
+            }
+          ],
+          "right_evidence": []
+        },
+        {
+          "category": "Removed file access",
+          "subject": "<REDACTED_PATH> (openat)",
+          "detail_group": null,
+          "left": [
+            "success"
+          ],
+          "right": [],
+          "left_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 10,
+              "end_line": 10
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 17,
+              "end_line": 17
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 23,
+              "end_line": 23
+            }
+          ],
+          "right_evidence": []
+        }
+      ],
+      "runs": {
+        "good": {
+          "id": "18d6b5511c470778-20069",
+          "exit_code": 0,
+          "warnings": [],
+          "events": 133
+        },
+        "repeat": {
+          "id": "18d6b5511ed11a1e-20115",
+          "exit_code": 0,
+          "warnings": [],
+          "events": 133
+        },
+        "bad": {
+          "id": "18d6b55123533ce6-20144",
+          "exit_code": 128,
+          "warnings": [],
+          "events": 36
+        }
+      }
+    },
+    {
+      "case": "gcc-header",
+      "first_useful_rank": 2,
+      "total_changes": 1255,
+      "control_changes": 2,
+      "folded_control": 0,
+      "control_display_entries": 2,
+      "reliability": {
+        "left": {
+          "capture": "complete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "complete",
+          "storage": "verified"
+        }
+      },
+      "diff_exit_code": 1,
+      "top5": [
+        {
+          "category": "Exit status",
+          "subject": "",
+          "detail_group": null,
+          "left": [
+            "code=Some(0), signal=None"
+          ],
+          "right": [
+            "code=Some(1), signal=None"
+          ],
+          "left_evidence": [],
+          "right_evidence": []
+        },
+        {
+          "category": "File access outcome changes",
+          "subject": "<REDACTED_PATH> (openat)",
+          "detail_group": null,
+          "left": [
+            "success"
+          ],
+          "right": [
+            "ENOENT"
+          ],
+          "left_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 77,
+              "end_line": 77
+            }
+          ],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 77,
+              "end_line": 77
+            }
+          ]
+        },
+        {
+          "category": "Executable changes",
+          "subject": "/usr/bin/as (execve)",
+          "detail_group": null,
+          "left": [
+            "success"
+          ],
+          "right": [],
+          "left_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 1366,
+              "end_line": 1368
+            }
+          ],
+          "right_evidence": []
+        },
+        {
+          "category": "Execution attempt changes",
+          "subject": "<REDACTED_PATH> (execve)",
+          "detail_group": null,
+          "left": [
+            "ENOENT"
+          ],
+          "right": [],
+          "left_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 1361,
+              "end_line": 1361
+            }
+          ],
+          "right_evidence": []
+        },
+        {
+          "category": "Execution attempt changes",
+          "subject": "<REDACTED_PATH> (execve)",
+          "detail_group": null,
+          "left": [
+            "ENOENT"
+          ],
+          "right": [],
+          "left_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 1360,
+              "end_line": 1360
+            }
+          ],
+          "right_evidence": []
+        }
+      ],
+      "runs": {
+        "good": {
+          "id": "18d6b5515746163d-20331",
+          "exit_code": 0,
+          "warnings": [],
+          "events": 1374
+        },
+        "repeat": {
+          "id": "18d6b55183fb1ba9-20341",
+          "exit_code": 0,
+          "warnings": [],
+          "events": 1374
+        },
+        "bad": {
+          "id": "18d6b551a38a0428-20351",
+          "exit_code": 1,
+          "warnings": [],
+          "events": 85
+        }
+      }
+    },
+    {
+      "case": "cargo-linker",
+      "first_useful_rank": 2,
+      "total_changes": 2045,
+      "control_changes": 1598,
+      "folded_control": 876,
+      "control_display_entries": 724,
+      "reliability": {
+        "left": {
+          "capture": "incomplete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "incomplete",
+          "storage": "verified"
+        }
+      },
+      "diff_exit_code": 3,
+      "top5": [
+        {
+          "category": "Exit status",
+          "subject": "",
+          "detail_group": null,
+          "left": [
+            "code=Some(0), signal=None"
+          ],
+          "right": [
+            "code=Some(101), signal=None"
+          ],
+          "left_evidence": [],
+          "right_evidence": []
+        },
+        {
+          "category": "Execution attempt changes",
+          "subject": "<REDACTED_PATH> (execve)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "ENOENT"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 778,
+              "end_line": 778
+            }
+          ]
+        },
+        {
+          "category": "New file access",
+          "subject": "<REDACTED_PATH> (openat)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 784,
+              "end_line": 784
+            }
+          ]
+        },
+        {
+          "category": "New file access",
+          "subject": "<REDACTED_PATH> (openat)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 542,
+              "end_line": 542
+            }
+          ]
+        },
+        {
+          "category": "Executable changes",
+          "subject": "<REDACTED_PATH> (execve)",
+          "detail_group": null,
+          "left": [
+            "success"
+          ],
+          "right": [],
+          "left_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 926,
+              "end_line": 928
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 1934,
+              "end_line": 1936
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 2672,
+              "end_line": 2674
+            }
+          ],
+          "right_evidence": []
+        }
+      ],
+      "runs": {
+        "good": {
+          "id": "18d6b551ad78bc90-20374",
+          "exit_code": 0,
+          "warnings": [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+          ],
+          "events": 14634
+        },
+        "repeat": {
+          "id": "18d6b554c6a8f79f-21563",
+          "exit_code": 0,
+          "warnings": [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+          ],
+          "events": 14633
+        },
+        "bad": {
+          "id": "18d6b557f4725138-22600",
+          "exit_code": 101,
+          "warnings": [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+          ],
+          "events": 776
+        }
+      }
+    }
+  ],
+  "_public_archive_derivative": {
+    "kind": "redacted_derivative",
+    "original_evidence": "retained in private archive",
+    "measurements": "historical; not rerun",
+    "scope": "only explicitly listed local paths redacted"
+  }
+}

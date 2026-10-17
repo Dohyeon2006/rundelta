@@ -1,0 +1,74 @@
+[
+  {
+    "run": "good",
+    "evidence": {
+      "file": "raw/trace.log",
+      "line": 2380,
+      "end_line": 2380
+    },
+    "event": {
+      "kind": "file",
+      "operation": "access",
+      "path": "${WORK}/pybind/venv/lib/python3.9/site-packages/pybind11/share/cmake/pybind11/pybind11Config.cmake",
+      "outcome": "success",
+      "argv": null,
+      "cwd_before": "${WORK}/pybind",
+      "context_uncertain": false
+    },
+    "decoded_redacted_excerpt": "<PID> access(\"${WORK}/pybind/venv/lib/python3.9/site-packages/pybind11/share/cmake/pybind11/pybind11Config.cmake\", R_OK) = 0"
+  },
+  {
+    "run": "good",
+    "evidence": {
+      "file": "raw/trace.log",
+      "line": 2385,
+      "end_line": 2385
+    },
+    "event": {
+      "kind": "file",
+      "operation": "access",
+      "path": "${WORK}/pybind/venv/lib/python3.9/site-packages/pybind11/share/cmake/pybind11/pybind11Config.cmake",
+      "outcome": "success",
+      "argv": null,
+      "cwd_before": "${WORK}/pybind",
+      "context_uncertain": false
+    },
+    "decoded_redacted_excerpt": "<PID> access(\"${WORK}/pybind/venv/lib/python3.9/site-packages/pybind11/share/cmake/pybind11/pybind11Config.cmake\", R_OK) = 0"
+  },
+  {
+    "run": "bad",
+    "evidence": {
+      "file": "raw/trace.log",
+      "line": 2303,
+      "end_line": 2303
+    },
+    "event": {
+      "kind": "file",
+      "operation": "access",
+      "path": "${WORK}/pybind/venv/pybind11Config.cmake",
+      "outcome": "ENOENT",
+      "argv": null,
+      "cwd_before": "${WORK}/pybind",
+      "context_uncertain": false
+    },
+    "decoded_redacted_excerpt": "<PID> access(\"${WORK}/pybind/venv/pybind11Config.cmake\", R_OK) = -1 ENOENT (No such file or directory)"
+  },
+  {
+    "run": "bad",
+    "evidence": {
+      "file": "raw/trace.log",
+      "line": 2315,
+      "end_line": 2315
+    },
+    "event": {
+      "kind": "file",
+      "operation": "access",
+      "path": "${WORK}/tools/pybind11Config.cmake",
+      "outcome": "ENOENT",
+      "argv": null,
+      "cwd_before": "${WORK}/pybind",
+      "context_uncertain": false
+    },
+    "decoded_redacted_excerpt": "<PID> access(\"${WORK}/tools/pybind11Config.cmake\", R_OK) = -1 ENOENT (No such file or directory)"
+  }
+]

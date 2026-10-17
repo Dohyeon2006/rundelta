@@ -4,7 +4,14 @@
 //! its evidence-file label, and an optional last-observed CWD. Line syntax is
 //! decoded incrementally, while task generations and filesystem contexts are
 //! resolved once at [`TraceParser::finish`]. Those transient relationships are
-//! available to capture completion but never enter the persisted event schema.
+//! available to capture completion. Default Event v2 keeps them transient;
+//! explicit trace-v1 recording copies the observed generation ordinals into
+//! Event v3 without changing the original evidence coordinates.
+//!
+//! 解析分两阶段，是因为 syscall 返回行可能晚于 child 的首条活动：逐行阶段保留
+//! 原始坐标与成功/失败事实，结束阶段再按 entry evidence 关联 generation 和 FS
+//! context。这个排序用于保守归约，不证明并发 syscall 的内核执行顺序；重叠窗口
+//! 必须单独处理。保存记录的读取不会重新执行这些推导。
 
 use crate::model::{Event, Evidence, bytes};
 use std::collections::BTreeMap;
@@ -15,10 +22,11 @@ mod fs_tests;
 ///
 /// Events retain their original evidence file and start/end lines. Warnings are
 /// ordered by parser observation and finish-time resolution; callers must not
-/// sort them or treat the transient task timeline as persisted evidence.
+/// sort them or reconstruct a saved timeline using a newer parser. Explicit
+/// trace-v1 callers may freeze its generation ordinals before persistence.
 #[derive(Default)]
 pub(crate) struct Parsed {
-    /// Normalized event-v2 values in parser insertion order.
+    /// Observations in parser insertion order; default v2 or explicitly bound v3.
     pub(crate) events: Vec<Event>,
     /// Evidence limitations in deterministic parser order.
     pub(crate) warnings: Vec<String>,
@@ -28,13 +36,66 @@ pub(crate) struct Parsed {
     pub(crate) timeline: TaskTimeline,
 }
 
+impl Parsed {
+    /// Freeze this parse's task-generation assignments as Event-v3 facts.
+    ///
+    /// Ordinals are one-based lifetimes of each numeric PID within this trace,
+    /// never cross-run identities. The same timeline supplies both actor and
+    /// spawned-child assignments, including uncertain origins; binding does not
+    /// clear warnings or promote incomplete observations. Default callers leave
+    /// Event v2 unchanged, and stored records are never passed through this API.
+    /// The events vector must retain its finish-time membership and order so its
+    /// indices still refer to this Parsed value's paired timeline.
+    pub(crate) fn bind_task_generations(&mut self) {
+        for (index, event) in self.events.iter_mut().enumerate() {
+            event.schema_version = 3;
+            event.task_generation = Some(
+                self.timeline
+                    .generation_ordinal(self.timeline.event_generation(index)),
+            );
+            event.child_generation = self
+                .timeline
+                .spawned_generation(index)
+                .map(|generation| self.timeline.generation_ordinal(generation));
+        }
+    }
+}
+
+/// One normalized observation and the action justified by that same raw call.
+/// Keeping them in one entry prevents a missing parallel action from silently
+/// becoming a no-op during filesystem-context resolution.
+struct ParsedObservation {
+    event: Event,
+    action: FsAction,
+}
+
+/// Accumulation before finish; auxiliary actions never enter persisted events.
+#[derive(Default)]
+struct ParsedTrace {
+    observations: Vec<ParsedObservation>,
+    warnings: Vec<String>,
+    lines: usize,
+}
+
+impl ParsedTrace {
+    /// The sole output boundary, including an explicit absent auxiliary action.
+    fn push(&mut self, event: Event, action: FsAction) {
+        self.observations.push(ParsedObservation { event, action });
+    }
+}
+
 /// Opaque identity for one lifetime of a numeric task ID within a trace.
 ///
 /// The value is meaningful only inside its owning [`TaskTimeline`] and is never
-/// serialized into event or metadata schemas.
+/// serialized into event or metadata schemas. Event v3 persists the independent
+/// one-based PID ordinal rather than this implementation's vector index.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct TaskGenerationId(usize);
 
+/// Why one observed numeric task ID acquired its current lifetime.
+///
+/// Origin describes evidence, not an OS lookup. A fresh spawn can introduce a
+/// new lifetime after an exit; merely seeing the same digits again cannot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum TaskGenerationOrigin {
     Initial {
@@ -67,9 +128,10 @@ struct TaskGeneration {
 
 /// Transient task identity interpretation in raw evidence order.
 ///
-/// Generation IDs never enter Event v2. Keeping them transient prevents a
-/// newer parser from retroactively changing historical record identity. Capture
-/// may query completion facts but cannot mutate or reconstruct this state.
+/// Generation IDs never enter Event v2. Explicit trace-v1 callers freeze the PID
+/// ordinals in Event v3; subsequent readers consume those saved assignments
+/// rather than running a newer parser. Capture may query completion facts but
+/// cannot mutate or reconstruct this state.
 #[derive(Default)]
 pub(crate) struct TaskTimeline {
     generations: Vec<TaskGeneration>,
@@ -79,6 +141,9 @@ pub(crate) struct TaskTimeline {
 }
 
 impl TaskTimeline {
+    // Ordinals identify PID lifetimes only inside this trace. Explicit trace-v1
+    // persists them; default v2 uses them for diagnostics. Retaining generations
+    // prevents an exit from being reassigned when the same PID appears later.
     fn push_generation(
         generations: &mut Vec<TaskGeneration>,
         ordinals: &mut BTreeMap<String, usize>,
@@ -98,22 +163,27 @@ impl TaskTimeline {
         id
     }
 
-    fn from_events(events: &[Event]) -> Self {
-        let mut order: Vec<usize> = (0..events.len()).collect();
+    /// Relate events without changing their stored coordinates or vector order.
+    ///
+    /// A resumed spawn is inserted only when its return is parsed, but its entry
+    /// line must introduce the child before child activity between those lines.
+    /// The original index is a deterministic tie break, not a scheduling claim.
+    fn from_observations(observations: &[ParsedObservation]) -> Self {
+        let mut order: Vec<usize> = (0..observations.len()).collect();
         order.sort_by_key(|&index| {
-            let evidence = &events[index].evidence;
+            let evidence = &observations[index].event.evidence;
             (evidence.line, evidence.end_line, index)
         });
         let mut generations = Vec::new();
-        let mut event_generations = vec![None; events.len()];
-        let mut spawned_generations = vec![None; events.len()];
+        let mut event_generations = vec![None; observations.len()];
+        let mut spawned_generations = vec![None; observations.len()];
         let mut active = BTreeMap::<String, TaskGenerationId>::new();
         let mut latest = BTreeMap::<String, TaskGenerationId>::new();
         let mut ordinals = BTreeMap::<String, usize>::new();
         let mut has_initial = false;
 
         for &index in &order {
-            let event = &events[index];
+            let event = &observations[index].event;
             let actor = active.get(&event.pid).copied().unwrap_or_else(|| {
                 let origin = if !has_initial {
                     has_initial = true;
@@ -143,6 +213,9 @@ impl TaskTimeline {
             }
 
             if let Some(child) = event.child_pid.as_deref() {
+                // Always allocate a lifetime, including live collisions. Reusing
+                // the existing actor would lend its FS state and eventual exit
+                // to a relationship that the trace did not establish.
                 let origin = active.get(child).copied().map_or(
                     TaskGenerationOrigin::Spawned {
                         parent: actor,
@@ -173,6 +246,7 @@ impl TaskTimeline {
     }
 
     /// Return the task generation that produced one normalized event index.
+    /// The index must belong to the events paired with this timeline in `Parsed`.
     pub(crate) fn event_generation(&self, event: usize) -> TaskGenerationId {
         self.event_generations[event]
     }
@@ -206,7 +280,20 @@ impl TaskTimeline {
         &self.generations[generation.0].pid
     }
 
+    /// Return the one-based lifetime ordinal for this generation's numeric PID.
+    ///
+    /// Unlike the opaque vector-backed ID, this value has an explicit persisted
+    /// meaning under task_generations_evidence_order_v1. It remains local to the
+    /// owning trace and must be paired with the observed PID.
+    pub(crate) fn generation_ordinal(&self, generation: TaskGenerationId) -> usize {
+        self.generations[generation.0].ordinal
+    }
+
     /// Return the normalized exit-event index belonging to this generation.
+    ///
+    /// Capture chooses its root from the first successful exec's generation and
+    /// queries that exact lifetime. A same-PID exit from another generation is
+    /// never a replacement for missing root completion evidence.
     pub(crate) fn exit_event(&self, generation: TaskGenerationId) -> Option<usize> {
         self.generations[generation.0].exit_event
     }
@@ -224,10 +311,13 @@ impl TaskTimeline {
         )
     }
 
-    fn apply_identity_findings(&self, parsed: &mut Parsed) {
+    // Backfill all observations belonging to an untrusted lifetime, not only the
+    // row that exposed it. One warning identifies the origin; each affected row
+    // still carries its own original raw-evidence coordinates.
+    fn apply_identity_findings(&self, parsed: &mut ParsedTrace) {
         for (index, actor) in self.event_generations.iter().copied().enumerate() {
             if self.is_untrusted(actor) {
-                parsed.events[index].context_uncertain = true;
+                parsed.observations[index].event.context_uncertain = true;
             }
         }
 
@@ -247,7 +337,8 @@ impl TaskTimeline {
                 TaskGenerationOrigin::Reappeared { previous, event } => {
                     let exit = self
                         .exit_event(previous)
-                        .and_then(|index| parsed.events.get(index))
+                        .and_then(|index| parsed.observations.get(index))
+                        .map(|observation| &observation.event)
                         .map(|event| format!(" at {}:{}", event.evidence.file, event.evidence.line))
                         .unwrap_or_default();
                     (
@@ -269,8 +360,8 @@ impl TaskTimeline {
                 ),
             };
 
-            parsed.events[event].context_uncertain = true;
-            let evidence = &parsed.events[event].evidence;
+            parsed.observations[event].event.context_uncertain = true;
+            let evidence = &parsed.observations[event].event.evidence;
             parsed.warnings.push(format!(
                 "{}:{}: task.identity: {detail}; generation identity is incomplete",
                 evidence.file, evidence.line
@@ -278,7 +369,9 @@ impl TaskTimeline {
         }
     }
 }
-// Split syscall arguments without splitting quoted strings or nested structures.
+// Commas inside quoted strings, structures, or FD annotations are not syscall
+// argument boundaries. This is a lightweight splitter for strace spellings,
+// not a complete grammar validator; role-specific decoding still follows.
 fn args(s: &str) -> Vec<&str> {
     let (mut quote, mut escape, mut depth, mut start) = (false, false, 0i32, 0);
     let mut out = vec![];
@@ -343,6 +436,10 @@ fn syscall_result(rest: &str) -> Option<(&str, &str)> {
     }
     None
 }
+// Preserve arbitrary Unix bytes through -xx escapes rather than lossy Unicode.
+// Literal ASCII also supports the existing synthetic fixtures.
+// A quote within the payload must be byte-escaped; accepting adjacent quoted
+// fragments would invent one decoded argument from malformed trace syntax.
 fn unquote(s: &str) -> Option<Vec<u8>> {
     let s = s.strip_prefix('"')?.strip_suffix('"')?;
     if !s.is_ascii() {
@@ -359,11 +456,40 @@ fn unquote(s: &str) -> Option<Vec<u8>> {
             out.push(u8::from_str_radix(&s[i + 2..i + 4], 16).ok()?);
             i += 4;
         } else {
+            if b[i] == b'"' {
+                return None;
+            }
             out.push(b[i]);
             i += 1;
         }
     }
     Some(out)
+}
+
+// strace's abbreviation marker belongs to syntax outside a quoted payload.
+// The scan only locates that marker; unquote still independently validates the
+// supported -xx string encoding. Escape tracking prevents a quoted byte from
+// incorrectly ending a payload and exposing its literal dots as syntax.
+fn has_unquoted_abbreviation(s: &str) -> bool {
+    let mut quoted = false;
+    let mut escaped = false;
+    let bytes = s.as_bytes();
+    for (index, byte) in bytes.iter().copied().enumerate() {
+        if quoted {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == b'"' {
+                quoted = false;
+            }
+        } else if byte == b'"' {
+            quoted = true;
+        } else if bytes[index..].starts_with(b"...") {
+            return true;
+        }
+    }
+    false
 }
 
 // Decode a complete -xx annotation payload after its angle delimiters have
@@ -381,7 +507,9 @@ fn decode_xx_annotation(encoded: &str) -> Option<Vec<u8>> {
     unquote(&format!("\"{encoded}\""))
 }
 
-// Decode only the complete -xx pathname annotation. No filesystem lookup.
+// A complete annotation contributes only the spelling printed for this syscall.
+// Its absolute prefix does not authenticate an FD or identify a physical file;
+// post-run filesystem lookups would also replace the original observation.
 fn annotated_path(value: &str) -> Option<String> {
     let encoded = value.split_once('<')?.1.strip_suffix('>')?;
     if encoded.is_empty() {
@@ -391,6 +519,11 @@ fn annotated_path(value: &str) -> Option<String> {
         .filter(|p| p.starts_with(b"/"))
         .map(|p| bytes(&p))
 }
+/// Preserve the operand or use only this syscall's complete dirfd annotation.
+///
+/// A dirfd annotation plus its relative operand describes the syscall's lexical
+/// path, including `.`/`..`; it is not canonicalized or joined to historical CWD.
+/// Unresolved forms remain explicit strings for the frozen Event-v2 contract.
 fn path(a: &[&str], at: bool) -> Option<String> {
     let p = unquote(a.get(usize::from(at))?)?;
     if p.starts_with(b"/") {
@@ -412,6 +545,8 @@ fn path(a: &[&str], at: bool) -> Option<String> {
                 && base.starts_with(b"/")
                 && !p.is_empty()
             {
+                // Both pieces are evidence from the same syscall. Do not reuse
+                // this spelling as an FD cache or a future CWD fallback.
                 if !base.ends_with(b"/") {
                     base.push(b'/');
                 }
@@ -432,19 +567,29 @@ fn path(a: &[&str], at: bool) -> Option<String> {
 /// acquiring a new trust claim when read by a newer binary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum FsAction {
+    /// No auxiliary action. Failed calls never perform a state transition.
     None,
+    /// A directory change proved successful by its numeric return value. Its
+    /// target is resolved from the paired event's per-syscall path evidence.
+    Cwd,
     Spawn(SpawnEffect),
     Unshare(UnshareEffect),
     Invalidate(InvalidationScope),
     Exit,
 }
 
+/// Reach justified by this parser's limited namespace/topology model.
+/// Connected invalidation follows known FS aliases; global invalidation is the
+/// conservative boundary where mount-namespace membership is not available.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum InvalidationScope {
     ConnectedFs,
     AllActiveContexts,
 }
 
+/// Role-specific argument positions and effects behind the capture selector.
+/// The paired table owns both collected names and parser dispatch so capture
+/// cannot omit a modeled context transition through a second filter list.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum TraceOperation {
     Exec { at: bool, argv_index: usize },
@@ -588,11 +733,14 @@ enum UnshareEffect {
     NoFsChange,
     SplitFs,
     SplitFsNamespaceUncertain,
+    /// Namespace evidence does not imply an FS split; retain known aliases.
+    ConnectedFsNamespaceUncertain,
     Unknown,
 }
 
-// Extract one complete field from a strace structure. Missing or truncated
-// fields stay unknown rather than being supplied with ABI defaults.
+// Extract a printed field from the expected strace structure. Missing/empty
+// fields do not acquire ABI defaults. The expression decoder checks its value;
+// this extraction itself does not validate the complete structure grammar.
 fn field_expression<'a>(args: &'a [&'a str], marker: &str) -> Option<&'a str> {
     args.iter().find_map(|arg| {
         let value = arg.split_once(marker)?.1;
@@ -605,6 +753,10 @@ fn field_expression<'a>(args: &'a [&'a str], marker: &str) -> Option<&'a str> {
     })
 }
 
+// Identical bit positions can have different syscall meanings. Keep the
+// allowed masks and symbol tables separate even when a constant is shared:
+// legacy clone's low byte is CSIGNAL; clone3's 0x80 is CLONE_NEWTIME; unshare's
+// 0x00100000 is EMPTY_MNTNS rather than PARENT_SETTID.
 const CSIGNAL_MASK: u64 = 0x0000_00ff;
 const CLONE_NEWTIME_BIT: u64 = 0x0000_0080;
 const CLONE_VM_BIT: u64 = 0x0000_0100;
@@ -717,6 +869,8 @@ fn parse_number(value: &str) -> Option<u64> {
     )
 }
 
+// Decode the current strace signal spellings, not a libc SIGRTMIN adjustment.
+// Unknown names return None rather than acquiring an invented numeric signal.
 fn standard_signal_number(term: &str) -> Option<u64> {
     let number = match term {
         "SIGHUP" => 1,
@@ -854,6 +1008,8 @@ fn unshare_flag_bit(term: &str) -> Option<u64> {
     })
 }
 
+// A known CLONE_FS term cannot excuse an unknown neighbour. Consume every term
+// before the caller can infer a shared/private relationship.
 fn symbolic_bits(expression: &str, flag_bit: fn(&str) -> Option<u64>) -> Option<u64> {
     let mut bits = 0;
     let mut count = 0;
@@ -867,6 +1023,10 @@ fn symbolic_bits(expression: &str, flag_bit: fn(&str) -> Option<u64>) -> Option<
     (count > 0).then_some(bits)
 }
 
+// This rejects modeled flag conflicts before any FS relationship is inferred;
+// it does not decide capability, resource, or kernel-version-dependent success.
+// A nonzero exit_signal with CLONE_PARENT/THREAD is a clone3-only restriction.
+// Legacy clone's CSIGNAL spelling may be nonzero for the same observed flags.
 fn valid_clone_combination(bits: u64, clone3: bool, exit_signal: u64) -> bool {
     let has = |mask| bits & mask != 0;
     if has(CLONE_SIGHAND_BIT) && !has(CLONE_VM_BIT)
@@ -878,7 +1038,7 @@ fn valid_clone_combination(bits: u64, clone3: bool, exit_signal: u64) -> bool {
     {
         return false;
     }
-    if exit_signal != 0 && has(CLONE_THREAD_BIT | CLONE_PARENT_BIT) {
+    if clone3 && exit_signal != 0 && has(CLONE_THREAD_BIT | CLONE_PARENT_BIT) {
         return false;
     }
     if clone3 {
@@ -893,6 +1053,8 @@ fn valid_clone_combination(bits: u64, clone3: bool, exit_signal: u64) -> bool {
     }
 }
 
+// Namespace evidence wins over an ordinary private-copy classification: the
+// child's path context is unmodeled even if its parent context remains known.
 fn spawn_effect(bits: u64) -> SpawnEffect {
     if bits & CLONE_NAMESPACE_FLAGS != 0 {
         SpawnEffect::PrivateFsNamespaceUncertain
@@ -903,6 +1065,7 @@ fn spawn_effect(bits: u64) -> SpawnEffect {
     }
 }
 
+/// Decode legacy clone's combined flags/CSIGNAL spelling without FS defaults.
 fn decode_legacy_clone_flags(expression: &str) -> SpawnEffect {
     let bits = if let Some(bits) = parse_number(expression) {
         bits
@@ -938,6 +1101,8 @@ fn decode_legacy_clone_flags(expression: &str) -> SpawnEffect {
     }
 }
 
+/// Decode clone3's independent flag and exit-signal fields.
+/// Missing either field cannot be repaired with the legacy low-byte convention.
 fn decode_clone3_flags(flags_expression: &str, exit_signal_expression: &str) -> SpawnEffect {
     let Some(bits) =
         parse_number(flags_expression).or_else(|| symbolic_bits(flags_expression, clone3_flag_bit))
@@ -959,6 +1124,11 @@ fn decode_clone3_flags(flags_expression: &str, exit_signal_expression: &str) -> 
     }
 }
 
+/// Interpret only unshare's allowed bits; it has neither child nor CSIGNAL.
+/// Namespace creation alone does not prove a split. Linux v6.12 ksys_unshare
+/// implies CLONE_FS only for NEWUSER/NEWNS among its namespace flags; the
+/// v7.2 ksys_unshare additionally makes EMPTY_MNTNS imply NEWNS, then CLONE_FS.
+/// Other namespace effects retain aliases and invalidate the connected group.
 fn decode_unshare_flags(expression: &str) -> UnshareEffect {
     let Some(bits) =
         parse_number(expression).or_else(|| symbolic_bits(expression, unshare_flag_bit))
@@ -969,7 +1139,13 @@ fn decode_unshare_flags(expression: &str) -> UnshareEffect {
         return UnshareEffect::Unknown;
     }
     if bits & UNSHARE_NAMESPACE_FLAGS != 0 {
-        UnshareEffect::SplitFsNamespaceUncertain
+        if bits & (CLONE_FS_BIT | CLONE_NEWUSER_BIT | CLONE_NEWNS_BIT | UNSHARE_EMPTY_MNTNS_BIT)
+            != 0
+        {
+            UnshareEffect::SplitFsNamespaceUncertain
+        } else {
+            UnshareEffect::ConnectedFsNamespaceUncertain
+        }
     } else if bits & CLONE_FS_BIT != 0 {
         UnshareEffect::SplitFs
     } else {
@@ -977,6 +1153,8 @@ fn decode_unshare_flags(expression: &str) -> UnshareEffect {
     }
 }
 
+// Called only after successful syscall evidence. Flags describe what the
+// observed creation did; a failed attempt must not introduce or alias a child.
 fn spawn_action(operation: &str, args: &[&str]) -> FsAction {
     match operation {
         "fork" | "vfork" => FsAction::Spawn(SpawnEffect::PrivateFs),
@@ -1004,6 +1182,8 @@ fn unshare_action(args: &[&str]) -> FsAction {
     )
 }
 
+/// Delay a proven CWD observation until the syscall's return evidence.
+/// An intervening task may observe the shared context while this window is open.
 #[derive(Clone)]
 struct PendingCwd {
     until: usize,
@@ -1011,6 +1191,8 @@ struct PendingCwd {
     event: usize,
 }
 
+/// Link the old/new contexts while a successful FS split is not yet ordered.
+/// `peer` lets an overlapping transition invalidate both uncertain sides.
 #[derive(Clone, Copy)]
 struct PendingTransition {
     until: usize,
@@ -1018,6 +1200,9 @@ struct PendingTransition {
     peer: usize,
 }
 
+/// Bound a private child's copy instant by return or its first actor evidence.
+/// Only the source retains this ambiguity; the child must not invalidate itself
+/// merely by demonstrating that it was already running before parent resume.
 #[derive(Clone, Copy)]
 struct PendingForkSnapshot {
     until: usize,
@@ -1025,6 +1210,9 @@ struct PendingForkSnapshot {
     child_fs: usize,
 }
 
+/// Shared observation state, not a reconstructed kernel `fs_struct` identity.
+/// Once invalidated, this context stays uncertain; an absolute syscall operand
+/// can still support its own path without repairing the unmodeled relationship.
 struct FsContext {
     cwd: Option<String>,
     uncertain: bool,
@@ -1044,6 +1232,9 @@ struct Task {
     exited: bool,
 }
 
+/// Capture-time membership and pending windows indexed by task lifetime.
+/// Context IDs are never reused here; exited task tombstones remain while the
+/// last active member removes a context. Neither map is persisted.
 struct FsState {
     tasks: BTreeMap<TaskGenerationId, Task>,
     contexts: BTreeMap<usize, FsContext>,
@@ -1051,6 +1242,9 @@ struct FsState {
 }
 
 impl FsState {
+    // Callers must release any old live membership before assigning a new one.
+    // Monotonic IDs also prevent pending peer references from aliasing a later
+    // context after an earlier group's last member exits.
     fn new_context(
         &mut self,
         cwd: Option<String>,
@@ -1080,6 +1274,9 @@ impl FsState {
         id
     }
 
+    // Exiting or splitting one task must not erase another member's context.
+    // The count is maintained by assignment/exit paths; this helper does not
+    // independently reconstruct or verify the membership relation.
     fn remove_member(&mut self, fs: usize) {
         if let Some(context) = self.contexts.get_mut(&fs) {
             if context.members > 0 {
@@ -1091,6 +1288,9 @@ impl FsState {
         }
     }
 
+    // Only the initial observed lifetime receives caller-supplied CWD context.
+    // A known spawn is assigned its state by the spawn action; an otherwise
+    // missing mapping cannot borrow state by matching a numeric PID.
     fn ensure_task(
         &mut self,
         generation: TaskGenerationId,
@@ -1111,6 +1311,9 @@ impl FsState {
         self.new_context(cwd, uncertain, generation)
     }
 
+    // Expiration is based on raw evidence bounds, not elapsed wall time. Once a
+    // return/child-activity bound is reached, later transitions no longer belong
+    // to that window. An already uncertain context must not regain certainty.
     fn settle(&mut self, fs: usize, line: usize) {
         let Some(context) = self.contexts.get_mut(&fs) else {
             return;
@@ -1136,6 +1339,8 @@ impl FsState {
             .retain(|pending| pending.until > line);
     }
 
+    // Hiding a pending CWD or split avoids inventing which side another task
+    // observed. Even a returned spelling is context only, never a path resolver.
     fn cwd_before(&mut self, fs: usize, line: usize) -> Option<String> {
         self.settle(fs, line);
         self.contexts.get(&fs).and_then(|context| {
@@ -1184,6 +1389,9 @@ impl FsState {
         }
     }
 
+    // A private copy inherits both the observation and its limitations. The
+    // caller separately checks pending windows, because cloning a last-known
+    // string cannot establish the copy instant inside an overlapping transition.
     fn snapshot(&self, fs: usize) -> (Option<String>, bool) {
         self.contexts
             .get(&fs)
@@ -1206,6 +1414,10 @@ impl FsState {
 
     /// Mark only the connected FS contexts uncertain. The returned indexes are
     /// the earlier evidence rows whose context claim became ambiguous later.
+    ///
+    /// Pending split peers and private-fork snapshots extend this scope only
+    /// while their evidence windows remain open. `seen` bounds traversal even
+    /// when old/new split contexts refer to one another.
     fn invalidate(&mut self, first: usize, line: usize) -> Vec<usize> {
         let mut pending_events = vec![];
         let mut todo = vec![first];
@@ -1238,6 +1450,10 @@ impl FsState {
         pending_events
     }
 
+    // CLONE_FS aliases the parent's context rather than copying its current
+    // spelling: subsequent verified CWD changes must reach every live member.
+    // The caller supplies a newly introduced child lifetime, not an existing
+    // member already counted in this same context.
     fn replace_child(&mut self, child: TaskGenerationId, fs: usize) {
         if let Some(old) = self.tasks.insert(child, Task { fs, exited: false })
             && !old.exited
@@ -1250,6 +1466,9 @@ impl FsState {
         }
     }
 
+    // Used both for a private spawn and for unshare's caller. Releasing the old
+    // membership before assigning a new context leaves former siblings alive
+    // and prevents later changes from propagating across the proven split.
     fn private_child(
         &mut self,
         child: TaskGenerationId,
@@ -1264,6 +1483,8 @@ impl FsState {
         self.new_context(cwd, uncertain, child)
     }
 
+    // An exit ends exactly one generation's membership. The tombstone prevents
+    // repeated cleanup from decrementing a surviving shared group twice.
     fn exit(&mut self, generation: TaskGenerationId) {
         let fs = match self.tasks.get_mut(&generation) {
             Some(task) if !task.exited => {
@@ -1289,9 +1510,10 @@ fn parse(raw: &str, file: &str) -> Parsed {
 pub(crate) struct TraceParser<'a> {
     file: &'a str,
     initial_cwd: Option<&'a str>,
-    parsed: Parsed,
+    parsed: ParsedTrace,
+    // strace permits one unfinished syscall per task. A second entry replaces
+    // the prefix with an explicit warning; it is not silently merged with it.
     pending: BTreeMap<String, (String, usize)>,
-    actions: Vec<FsAction>,
     saw_line: bool,
     last_line_terminated: bool,
 }
@@ -1305,9 +1527,8 @@ impl<'a> TraceParser<'a> {
         Self {
             file,
             initial_cwd,
-            parsed: Parsed::default(),
+            parsed: ParsedTrace::default(),
             pending: BTreeMap::new(),
-            actions: Vec::new(),
             saw_line: false,
             last_line_terminated: false,
         }
@@ -1318,6 +1539,9 @@ impl<'a> TraceParser<'a> {
     /// The caller may retain or omit its trailing newline; only the final
     /// pushed line controls the truncation warning. Embedded newlines are not a
     /// chunking API: callers must identify logical lines before this boundary.
+    ///
+    /// Every push increments the raw line count, including unsupported/signal
+    /// rows. Skipping them here would shift all later evidence coordinates.
     pub(crate) fn push_line(&mut self, line: &str) {
         let (line, terminated) = match line.strip_suffix('\n') {
             Some(line) => (line.strip_suffix('\r').unwrap_or(line), true),
@@ -1332,7 +1556,6 @@ impl<'a> TraceParser<'a> {
             line,
             &mut self.parsed,
             &mut self.pending,
-            &mut self.actions,
         );
     }
 
@@ -1340,6 +1563,11 @@ impl<'a> TraceParser<'a> {
     ///
     /// Consuming `self` prevents later lines from invalidating the returned
     /// TaskTimeline or its finish-time uncertainty backfills.
+    ///
+    /// Line syntax alone cannot settle child-before-resume and PID reuse. Build
+    /// one timeline from the retained events, mark identity limitations, then
+    /// resolve FS relationships with that same lifetime interpretation. Pending
+    /// calls and a missing final newline remain limitations, not fabricated exits.
     pub(crate) fn finish(mut self) -> Parsed {
         if self.saw_line && !self.last_line_terminated {
             self.parsed.warnings.push(format!(
@@ -1347,27 +1575,43 @@ impl<'a> TraceParser<'a> {
                 self.file
             ));
         }
+        // Task-key order is the existing deterministic EOF-warning policy.
+        // Re-sorting the merged warnings by line would change their frozen order
+        // relative to syntax findings and the later identity/context backfills.
         for (_, (_, line)) in self.pending {
             self.parsed.warnings.push(format!(
                 "{}:{line}: unfinished call at end of trace",
                 self.file
             ));
         }
-        let timeline = TaskTimeline::from_events(&self.parsed.events);
+        let timeline = TaskTimeline::from_observations(&self.parsed.observations);
         timeline.apply_identity_findings(&mut self.parsed);
-        resolve_context(&mut self.parsed, self.initial_cwd, &self.actions, &timeline);
-        self.parsed.timeline = timeline;
-        self.parsed
+        resolve_context(&mut self.parsed, self.initial_cwd, &timeline);
+        Parsed {
+            events: self
+                .parsed
+                .observations
+                .into_iter()
+                .map(|entry| entry.event)
+                .collect(),
+            warnings: self.parsed.warnings,
+            lines: self.parsed.lines,
+            timeline,
+        }
     }
 }
 
+/// Decode one raw row while retaining an unfinished call's entry coordinate.
+///
+/// No row is re-numbered after filtering. Unsupported observations remain in raw
+/// storage and produce warnings; signal delivery rows are intentionally outside
+/// normalized Event-v2 families and are not target completion evidence.
 fn parse_trace_line(
     file: &str,
     n: usize,
     line: &str,
-    p: &mut Parsed,
+    p: &mut ParsedTrace,
     pending: &mut BTreeMap<String, (String, usize)>,
-    actions: &mut Vec<FsAction>,
 ) {
     let Some((pid, body)) = line.trim().split_once(char::is_whitespace) else {
         p.warnings.push(format!("{file}:{n}: malformed line"));
@@ -1388,6 +1632,9 @@ fn parse_trace_line(
         return;
     }
     if body.starts_with("<... ") {
+        // A task-keyed prefix is necessary but insufficient: the resumed syscall
+        // name must also match. Keeping entry and return bounds preserves the
+        // original two pieces instead of pretending the call occupied one row.
         if let (Some((prefix, start)), Some((_, tail))) =
             (pending.remove(pid), body.split_once(" resumed>"))
         {
@@ -1409,7 +1656,7 @@ fn parse_trace_line(
             return;
         }
     }
-    if body.contains("...") {
+    if has_unquoted_abbreviation(&body) {
         p.warnings.push(format!(
             "{file}:{n}: abbreviated trace data; inspect raw evidence"
         ));
@@ -1423,6 +1670,9 @@ fn parse_trace_line(
         return;
     }
     if body.starts_with("+++ ") {
+        // Preserve unknown signal spellings as raw outcome facts. Translating
+        // them into a numeric status belongs to capture, where failure to decode
+        // stays explicit; neither parser nor diff may substitute 128 + signal.
         let exited = body
             .strip_prefix("+++ exited with ")
             .and_then(|s| s.strip_suffix(" +++"))
@@ -1440,36 +1690,60 @@ fn parse_trace_line(
                 .push(format!("{file}:{n}: unrecognized process status: {body}"));
             return;
         }
-        p.events.push(Event {
-            schema_version: 2,
-            pid: pid.into(),
-            kind: "exit".into(),
-            operation: "exit".into(),
-            path: None,
-            outcome: body,
-            evidence,
-            argv: None,
-            child_pid: None,
-            cwd_before: None,
-            context_uncertain: false,
-        });
-        actions.push(FsAction::Exit);
+        // An exit closes this numeric task's observed lifetime. Retaining its
+        // prefix would let a later resumed row borrow evidence across PID reuse.
+        if let Some((_, start)) = pending.remove(pid) {
+            p.warnings.push(format!(
+                "{file}:{n}: unfinished call from line {start} ended with task {pid} exit; consult raw evidence"
+            ));
+        }
+        p.push(
+            Event {
+                schema_version: 2,
+                task_generation: None,
+                child_generation: None,
+                pid: pid.into(),
+                kind: "exit".into(),
+                operation: "exit".into(),
+                path: None,
+                outcome: body,
+                evidence,
+                argv: None,
+                child_pid: None,
+                cwd_before: None,
+                context_uncertain: false,
+            },
+            FsAction::Exit,
+        );
         return;
     }
     let result = (|| -> Option<(Event, FsAction)> {
         let (op, rest) = body.split_once('(')?;
         let (arg, ret) = syscall_result(rest)?;
         let a = args(arg);
-        let value = ret.split_whitespace().next()?;
-        let outcome = if value == "-1" {
-            ret.split_whitespace().nth(1)?.to_string()
-        } else if value
+        let mut returned = ret.split_whitespace();
+        let value = returned.next()?;
+        let succeeded = value
             .split('<')
             .next()?
             .parse::<i64>()
-            .is_ok_and(|v| v >= 0)
-        {
+            .is_ok_and(|v| v >= 0);
+        let outcome = if succeeded {
             "success".into()
+        } else if value == "-1" {
+            let errno = returned.next()?;
+            // Accept portable errno/restart spellings without an OS lookup or
+            // a frozen errno list. Arbitrary display text cannot become the
+            // reserved success outcome used by completion and comparison.
+            if !errno.starts_with('E')
+                || errno.len() < 2
+                || !errno
+                    .bytes()
+                    .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'_')
+            {
+                return None;
+            }
+            errno.into()
         } else {
             return None;
         };
@@ -1500,7 +1774,7 @@ fn parse_trace_line(
                 returned_path: true,
                 ..
             }
-        ) && outcome == "success"
+        ) && succeeded
             && relative_operand
             && let Some(observed) = annotated_path(value)
         {
@@ -1522,8 +1796,13 @@ fn parse_trace_line(
         } else {
             None
         };
-        let action = if outcome == "success" {
+        // A failed transition is still an event, but it cannot create, share,
+        // split, or invalidate FS state. Ordinary exec attempts use None on both
+        // success and failure: this model preserves their context and does not
+        // implement non-leader-thread exec's special task-identity migration.
+        let action = if succeeded {
             match operation {
+                TraceOperation::Cwd { .. } => FsAction::Cwd,
                 TraceOperation::Spawn => spawn_action(op, &a),
                 TraceOperation::Unshare => unshare_action(&a),
                 TraceOperation::Invalidate(scope) => FsAction::Invalidate(scope),
@@ -1535,11 +1814,13 @@ fn parse_trace_line(
         Some((
             Event {
                 schema_version: 2,
+                task_generation: None,
+                child_generation: None,
                 pid: pid.into(),
                 kind: kind.into(),
                 operation: op.into(),
                 path,
-                child_pid: (kind == "spawn" && outcome == "success").then(|| value.to_string()),
+                child_pid: (kind == "spawn" && succeeded).then(|| value.to_string()),
                 context_uncertain: false,
                 argv,
                 cwd_before: None,
@@ -1550,8 +1831,22 @@ fn parse_trace_line(
         ))
     })();
     if let Some((event, action)) = result {
-        p.events.push(event);
-        actions.push(action);
+        // A child can enter a syscall before its parent's spawn return appears.
+        // Only a prefix older than the spawn's entry is from an incompatible
+        // lifetime; clearing every child prefix here would discard legal -f
+        // unfinished/resumed interleavings.
+        if let Some(child) = event.child_pid.as_deref()
+            && pending
+                .get(child)
+                .is_some_and(|(_, start)| *start < event.evidence.line)
+            && let Some((_, start)) = pending.remove(child)
+        {
+            p.warnings.push(format!(
+                "{file}:{n}: task {child} unfinished call from line {start} predates spawn entry at line {}; consult raw evidence",
+                event.evidence.line
+            ));
+        }
+        p.push(event, action);
     } else {
         p.warnings.push(format!(
             "{file}:{n}: unsupported or incomplete event: {body}"
@@ -1564,6 +1859,7 @@ fn parse_trace_line(
 /// This adapter defines line boundaries with `split_inclusive`, so evidence
 /// coordinates, CRLF handling, EOF warnings, warning order, and finish-time
 /// backfills are identical to feeding the same lines through [`TraceParser`].
+#[cfg(test)]
 pub(crate) fn parse_with_cwd(raw: &str, file: &str, initial_cwd: Option<&str>) -> Parsed {
     let mut parser = TraceParser::new(file, initial_cwd);
     for line in raw.split_inclusive('\n') {
@@ -1571,36 +1867,50 @@ pub(crate) fn parse_with_cwd(raw: &str, file: &str, initial_cwd: Option<&str>) -
     }
     parser.finish()
 }
-fn apply_fs_uncertainty(p: &mut Parsed, state: &mut FsState, fs: usize, line: usize) {
+// Collision handling already emitted an identity warning. Reuse the same
+// invalidation/backfill mechanism without duplicating a second reason message.
+fn apply_fs_uncertainty(p: &mut ParsedTrace, state: &mut FsState, fs: usize, line: usize) {
     let affected = state.invalidate(fs, line);
     for index in affected {
-        if let Some(previous) = p.events.get_mut(index) {
-            previous.context_uncertain = true;
+        if let Some(previous) = p.observations.get_mut(index) {
+            previous.event.context_uncertain = true;
         }
     }
 }
 
-fn mark_fs_uncertain(p: &mut Parsed, state: &mut FsState, fs: usize, event: usize, reason: &str) {
-    let line = p.events[event].evidence.line;
+// One conflicting row explains the finding, while returned pending indices
+// downgrade earlier in-flight claims. Only uncertainty markings change;
+// their original syscall outcomes, paths, and raw coordinates are retained.
+fn mark_fs_uncertain(
+    p: &mut ParsedTrace,
+    state: &mut FsState,
+    fs: usize,
+    event: usize,
+    reason: &str,
+) {
+    let line = p.observations[event].event.evidence.line;
     let mut affected = state.invalidate(fs, line);
     affected.push(event);
     affected.sort_unstable();
     affected.dedup();
     for index in affected {
-        if let Some(previous) = p.events.get_mut(index) {
-            previous.context_uncertain = true;
+        if let Some(previous) = p.observations.get_mut(index) {
+            previous.event.context_uncertain = true;
         }
     }
-    if let Some(current) = p.events.get(event) {
+    if let Some(current) = p.observations.get(event) {
         p.warnings.push(format!(
             "{}:{}: fs.context: {reason}; affected relative path context is incomplete",
-            current.evidence.file, current.evidence.line
+            current.event.evidence.file, current.event.evidence.line
         ));
     }
 }
 
-fn mark_all_fs_uncertain(p: &mut Parsed, state: &mut FsState, event: usize, reason: &str) {
-    let line = p.events[event].evidence.line;
+// Mount topology/pivot_root can reach contexts beyond a known CLONE_FS group.
+// Without mount-namespace membership, locality is unproved: invalidate every
+// active context rather than guessing which private branches were isolated.
+fn mark_all_fs_uncertain(p: &mut ParsedTrace, state: &mut FsState, event: usize, reason: &str) {
+    let line = p.observations[event].event.evidence.line;
     let contexts: Vec<usize> = state.contexts.keys().copied().collect();
     let mut affected = vec![event];
     for fs in contexts {
@@ -1609,24 +1919,29 @@ fn mark_all_fs_uncertain(p: &mut Parsed, state: &mut FsState, event: usize, reas
     affected.sort_unstable();
     affected.dedup();
     for index in affected {
-        if let Some(previous) = p.events.get_mut(index) {
-            previous.context_uncertain = true;
+        if let Some(previous) = p.observations.get_mut(index) {
+            previous.event.context_uncertain = true;
         }
     }
-    if let Some(current) = p.events.get(event) {
+    if let Some(current) = p.observations.get(event) {
         p.warnings.push(format!(
             "{}:{}: fs.context: {reason}; affected relative path context is incomplete",
-            current.evidence.file, current.evidence.line
+            current.event.evidence.file, current.event.evidence.line
         ));
     }
 }
 
-fn resolve_context(
-    p: &mut Parsed,
-    initial_cwd: Option<&str>,
-    actions: &[FsAction],
-    timeline: &TaskTimeline,
-) {
+/// Apply capture-time FS observations to the already-decoded evidence rows.
+///
+/// 共享关系只有成功 syscall 与可解析 flags 才能建立。普通 private clone 复制
+/// observation；CLONE_FS 共用一个 context；unshare 只移动 caller。Namespace
+/// 分支与 unknown flags 保持不同作用域：前者有证据证明局部新 context，但其
+/// 路径语义未建模；后者连共享/私有关系都未知，不能猜测。
+///
+/// Evidence order alone does not prove ordering inside unfinished/resumed
+/// intervals. Pending CWD/split/fork windows make those overlaps explicit. This
+/// pass does not load paths, canonicalize spellings, or repair historical runs.
+fn resolve_context(p: &mut ParsedTrace, initial_cwd: Option<&str>, timeline: &TaskTimeline) {
     // Creation is ordered by syscall entry evidence, including unfinished calls,
     // so a child can receive its FS context before its first observed syscall.
     let mut state = FsState {
@@ -1636,11 +1951,12 @@ fn resolve_context(
     };
 
     for index in timeline.events_in_evidence_order() {
-        let action = actions.get(index).copied().unwrap_or(FsAction::None);
-        let event = &p.events[index];
+        let observation = &p.observations[index];
+        let action = observation.action;
+        let event = &observation.event;
         let kind = event.kind.clone();
         let path = event.path.clone();
-        let outcome = event.outcome.clone();
+        let successful_cwd = action == FsAction::Cwd;
         let argv_missing = event.kind == "exec" && event.argv.is_none();
         let start = event.evidence.line;
         let end = event.evidence.end_line;
@@ -1648,9 +1964,9 @@ fn resolve_context(
         let generation = timeline.event_generation(index);
         let fs = state.ensure_task(generation, timeline.origin(generation), initial_cwd);
         let base = state.cwd_before(fs, start);
-        p.events[index].cwd_before = base.clone();
+        p.observations[index].event.cwd_before = base.clone();
         if state.is_uncertain(fs) || timeline.is_untrusted(generation) {
-            p.events[index].context_uncertain = true;
+            p.observations[index].event.context_uncertain = true;
         }
 
         match action {
@@ -1686,7 +2002,13 @@ fn resolve_context(
                             index,
                             "clone flags did not prove whether filesystem state is shared",
                         ),
-                        SpawnEffect::SharedFs | SpawnEffect::PrivateFs => {}
+                        // The contradictory numeric identity cannot prove a
+                        // fresh alias, but a claimed shared creation also cannot
+                        // prove isolation from the source's connected context.
+                        SpawnEffect::SharedFs => {
+                            apply_fs_uncertainty(p, &mut state, fs, start);
+                        }
+                        SpawnEffect::PrivateFs => {}
                     }
                 } else {
                     debug_assert!(matches!(
@@ -1701,9 +2023,13 @@ fn resolve_context(
                             let child_fs = state.private_child(child, cwd, uncertain);
                             let until = timeline
                                 .first_actor_event(child)
-                                .map(|event| p.events[event].evidence.line)
+                                .map(|event| p.observations[event].event.evidence.line)
                                 .unwrap_or(end)
                                 .min(end);
+                            // Child activity proves creation already happened,
+                            // so it closes the source's copy window even before
+                            // the parent return appears. Later source changes
+                            // must not retroactively invalidate that snapshot.
                             if !uncertain && until > start {
                                 state.add_pending_fork_snapshot(fs, until, index, child_fs);
                             }
@@ -1747,6 +2073,13 @@ fn resolve_context(
             }
             FsAction::Unshare(action) => match action {
                 UnshareEffect::NoFsChange => {}
+                UnshareEffect::ConnectedFsNamespaceUncertain => mark_fs_uncertain(
+                    p,
+                    &mut state,
+                    fs,
+                    index,
+                    "namespace change did not prove filesystem state was split",
+                ),
                 UnshareEffect::Unknown => mark_fs_uncertain(
                     p,
                     &mut state,
@@ -1836,10 +2169,13 @@ fn resolve_context(
                 ),
             },
             FsAction::Exit => state.exit(generation),
-            FsAction::None => {}
+            FsAction::None | FsAction::Cwd => {}
         }
 
-        if kind == "cwd" && outcome == "success" {
+        if successful_cwd {
+            // Historical CWD, even when last observed, cannot establish where a
+            // relative chdir landed after rename/root changes. Only this row's
+            // absolute operand/complete FD annotation may update the context.
             let verified_target = path
                 .as_ref()
                 .filter(|target| target.starts_with('/'))
@@ -1888,21 +2224,22 @@ fn resolve_context(
             .is_some_and(|value| value.starts_with("relative:"))
             || (kind == "cwd" && path.is_none())
         {
-            p.events[index].context_uncertain = true;
+            p.observations[index].event.context_uncertain = true;
             // A successful unresolved directory change already emitted the
             // context-level warning above. Failed calls do not transition the
             // context, but their own relative operand remains unverified.
-            if kind != "cwd" || outcome != "success" {
+            if !successful_cwd {
                 p.warnings.push(format!(
                     "{}:{}: path context unresolved; last observed CWD is not a verified current path; consult raw evidence",
-                    p.events[index].evidence.file, p.events[index].evidence.line
+                    p.observations[index].event.evidence.file, p.observations[index].event.evidence.line
                 ));
             }
         }
         if argv_missing {
             p.warnings.push(format!(
                 "{}:{}: execution arguments incomplete",
-                p.events[index].evidence.file, p.events[index].evidence.line
+                p.observations[index].event.evidence.file,
+                p.observations[index].event.evidence.line
             ));
         }
     }
@@ -1947,6 +2284,9 @@ mod tests {
 
     #[test]
     fn incremental_line_chunks_match_the_compatibility_adapter() {
+        // Both entry and return rows retain their original coordinates despite
+        // omitted intermediate terminators. This tests logical-line feeding,
+        // not arbitrary byte chunks or a second independent parser algorithm.
         let raw = concat!(
             "10 execve(\"/tool\", [\"tool\"], 0x0) = 0\r\n",
             "10 clone(flags=SIGCHLD <unfinished ...>\n",
@@ -2027,7 +2367,7 @@ mod tests {
         parser.push_line("2 open(\"/observed\", O_RDONLY) = 3\n");
         parser.push_line("2 +++ exited with 0 +++\n");
         parser.push_line("1 +++ exited with 0 +++\n");
-        assert!(!parser.parsed.events[1].context_uncertain);
+        assert!(!parser.parsed.observations[1].event.context_uncertain);
 
         let parsed = parser.finish();
 
@@ -2064,6 +2404,36 @@ mod tests {
 #[cfg(test)]
 mod boundary_tests {
     use super::*;
+
+    #[test]
+    fn quoted_strings_reject_unescaped_quotes_and_preserve_encoded_quotes() {
+        let accepted = parse("1 access(\"/a\\x22b\", F_OK) = 0\n", "trace");
+        assert!(accepted.warnings.is_empty());
+        assert_eq!(accepted.events[0].path.as_deref(), Some("/a\"b"));
+        let rejected = parse("1 access(\"/a\"\"b\", F_OK) = 0\n", "trace");
+        assert!(rejected.events.is_empty());
+        assert!(rejected.warnings[0].starts_with("trace:1: unsupported or incomplete event:"));
+    }
+
+    #[test]
+    fn abbreviation_markers_are_syntax_not_literal_string_content() {
+        let accepted = parse(
+            "1 execve(\"/tool...name\", [\"argument...value\", \"\\x22...\\x22\"], 0) = 0\n",
+            "trace",
+        );
+        assert!(accepted.warnings.is_empty(), "{:?}", accepted.warnings);
+        assert_eq!(accepted.events[0].argv.as_ref().unwrap()[1], "\"...\"");
+        let rejected = parse("1 execve(\"/tool\", [\"arg\", ...], 0) = 0\n", "trace");
+        assert!(
+            rejected
+                .warnings
+                .iter()
+                .any(|w| w.contains("abbreviated trace data"))
+        );
+        assert!(rejected.events[0].argv.is_none());
+        assert_eq!(rejected.events[0].evidence.line, 1);
+        assert_eq!(rejected.events[0].evidence.end_line, 1);
+    }
 
     #[test]
     fn trace_selector_is_derived_from_the_parser_contract() {
@@ -2138,6 +2508,9 @@ mod boundary_tests {
     }
     #[test]
     fn malformed_truncated_and_mismatched_calls_warn() {
+        // These known bad forms must surface limitations. The assertion is not
+        // an exhaustive grammar test; strict quoted-string decoding has its own
+        // paired accepted/malformed regression in this module.
         for raw in [
             "1 open(\"\\x2f\"...",
             "1 madeup() = 0\n",
@@ -2327,6 +2700,9 @@ mod cwd_uncertainty_tests {
 
     #[test]
     fn xx_annotation_callers_preserve_their_existing_path_contracts() {
+        // A suffix such as " (deleted)" is not part of the complete -xx payload.
+        // Do not strip it to manufacture a usable directory observation; the
+        // unresolved spelling preserves why this evidence could not establish it.
         for (value, expected) in [
             ("3<\\x2f\\x66>", Some("/f")),
             ("3<\\x2f\\xff>", Some("/\\xff")),

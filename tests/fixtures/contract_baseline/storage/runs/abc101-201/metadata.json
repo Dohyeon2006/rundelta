@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "tool_version": "0.1.0-legacy",
+  "id": "abc101-201",
+  "name": "legacy-v1",
+  "command": [
+    "/usr/bin/baseline",
+    "--mode",
+    "fixed"
+  ],
+  "cwd": "/baseline",
+  "started": 3000,
+  "ended": 3010,
+  "backend": "strace legacy",
+  "state": "completed",
+  "exit_code": 0,
+  "signal": null,
+  "warnings": [],
+  "parsed_events": 1,
+  "raw_lines": 1
+}

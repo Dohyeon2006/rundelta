@@ -41,6 +41,30 @@ jobs:
           mkdir "$RUNNER_TEMP/actionlint"
           tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP/actionlint" actionlint
           python3 -B tests/test_export_safety.py --workflow "$RUNNER_TEMP/actionlint/actionlint"
+      - name: Public archive integrity and counterexamples
+        run: |
+          python3 -B tests/check_public_archive_freeze.py
+          python3 -B tests/test_public_archive_freeze.py
+      - name: Release closure counterexamples
+        run: python3 -B tests/test_release_closure.py
+      - name: Seal the actual checked-out candidate against its parent
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate=$(git rev-parse --verify 'HEAD^{commit}')
+          baseline=$(git rev-parse --verify "${candidate}^1^{commit}")
+          # checkout above selects an exact SHA. Refuse an attached branch so
+          # temporarily selecting the comparison baseline cannot move a branch.
+          if git symbolic-ref -q HEAD; then
+            echo 'Expected a detached candidate checkout' >&2
+            exit 1
+          fi
+          # The checker uses HEAD as its baseline and compares candidate blobs
+          # with checkout bytes. Change only detached HEAD: keep the actual
+          # candidate index/files intact, and restore HEAD even on rejection.
+          trap 'git update-ref --no-deref HEAD "$candidate"' EXIT
+          git update-ref --no-deref HEAD "$baseline"
+          python3 -B tests/check_release_closure.py --repo . --tree "$candidate"
       - name: Install Linux prerequisites
         run: |
           sudo apt-get update
@@ -75,10 +99,9 @@ jobs:
             -C "$RUNDELTA_UNPACK_DIR"
           cd "$RUNDELTA_UNPACK_DIR/RunDelta-0.2.0-alpha.1"
           export CARGO_TARGET_DIR="$RUNDELTA_UNPACK_DIR/build"
-          cargo test --locked
-          if [ -e target ]; then rmdir target; fi
-          cargo test --locked --test public_cli -- --ignored --exact public_cli_workflow
-          python3 -B tests/test_export_safety.py
+          cargo build --locked --bin rundelta
+          "$CARGO_TARGET_DIR/debug/rundelta" --version
+          "$CARGO_TARGET_DIR/debug/rundelta" --help
       - name: Confirm checkout stayed clean
         run: |
           test -z "$(git status --porcelain=v1 --untracked-files=all)"

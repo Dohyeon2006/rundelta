@@ -1,0 +1,600 @@
+{
+  "schema_version": 1,
+  "case": "bracket-lib-376",
+  "preregistration_sha256": "87c9eb9fa22ffeecbef55188f7a53b2d4e0dd82660c9830189eb8bbc02ce3b27",
+  "original_issue_reproduction": "original dependency configure failure only; full application not tested",
+  "target_symptom_matched": true,
+  "control_valid": true,
+  "command": [
+    "cmake",
+    "${CASE}/source/expat-sys-2.1.6/expat",
+    "-B",
+    "${CASE}/build",
+    "-DBUILD_shared=OFF",
+    "-DBUILD_tools=OFF",
+    "-DBUILD_examples=OFF",
+    "-DBUILD_tests=OFF",
+    "-DCMAKE_INSTALL_PREFIX=${CASE}/install",
+    "-DCMAKE_C_FLAGS= -ffunction-sections -fdata-sections -fPIC -m64 -w",
+    "-DCMAKE_C_COMPILER=/usr/bin/cc",
+    "-DCMAKE_CXX_FLAGS= -ffunction-sections -fdata-sections -fPIC -m64 -w",
+    "-DCMAKE_CXX_COMPILER=/usr/bin/c++",
+    "-DCMAKE_ASM_FLAGS= -ffunction-sections -fdata-sections -fPIC -m64 -w",
+    "-DCMAKE_ASM_COMPILER=/usr/bin/cc",
+    "-DCMAKE_BUILD_TYPE=Debug"
+  ],
+  "cwd": "${CASE}",
+  "selected_startup_environment": [],
+  "changed_environment": [
+    {
+      "key": "PATH",
+      "good": "${WORK}/tools/cmake-3.31.6/lib/python3.12/site-packages/cmake/data/bin:/usr/bin:/bin",
+      "bad": "${WORK}/tools/cmake-4.0.3/lib/python3.12/site-packages/cmake/data/bin:/usr/bin:/bin"
+    }
+  ],
+  "source_tools_unchanged": true,
+  "fixtures_unchanged": true,
+  "phases": {
+    "good": {
+      "state": "completed",
+      "target_exit": 0,
+      "target_signal": null,
+      "collector_exit": 0,
+      "collector_signal": null,
+      "capture": "partial",
+      "storage": "verified",
+      "events": 16188,
+      "warnings": [
+        {
+          "category": "cwd.path_unresolved",
+          "text": "raw/trace.log:11: path context unresolved; last observed CWD is not a verified current path; consult raw evidence",
+          "event": {
+            "kind": "file",
+            "operation": "access",
+            "path": "relative:cmake [cwd unresolved]",
+            "outcome": "ENOENT",
+            "context_uncertain": true,
+            "evidence": {
+              "file": "raw/trace.log",
+              "line": 11,
+              "end_line": 11
+            }
+          },
+          "access_mode": "X_OK"
+        }
+      ],
+      "show_sha256": "6fea9ff7d6a4bc67f866dcc1144d324189f3a43b3a92857e4e2b6d1079827b79",
+      "events_sha256": "7c2198bd296f923eb91f07c6f4654ff3a117486982ebf162a371b430e46abe15"
+    },
+    "repeat": {
+      "state": "completed",
+      "target_exit": 0,
+      "target_signal": null,
+      "collector_exit": 0,
+      "collector_signal": null,
+      "capture": "partial",
+      "storage": "verified",
+      "events": 16188,
+      "warnings": [
+        {
+          "category": "cwd.path_unresolved",
+          "text": "raw/trace.log:11: path context unresolved; last observed CWD is not a verified current path; consult raw evidence",
+          "event": {
+            "kind": "file",
+            "operation": "access",
+            "path": "relative:cmake [cwd unresolved]",
+            "outcome": "ENOENT",
+            "context_uncertain": true,
+            "evidence": {
+              "file": "raw/trace.log",
+              "line": 11,
+              "end_line": 11
+            }
+          },
+          "access_mode": "X_OK"
+        }
+      ],
+      "show_sha256": "7c30ed97b40a6694c8bde592d576fd00f00affd31bb4406b85d062820c64a6c0",
+      "events_sha256": "ac1149377dfd1e036961238772ab0b167b906f028d07d065f9dfba000245ec52"
+    },
+    "bad": {
+      "state": "completed",
+      "target_exit": 1,
+      "target_signal": null,
+      "collector_exit": 1,
+      "collector_signal": null,
+      "capture": "partial",
+      "storage": "verified",
+      "events": 2560,
+      "warnings": [
+        {
+          "category": "cwd.path_unresolved",
+          "text": "raw/trace.log:11: path context unresolved; last observed CWD is not a verified current path; consult raw evidence",
+          "event": {
+            "kind": "file",
+            "operation": "access",
+            "path": "relative:cmake [cwd unresolved]",
+            "outcome": "ENOENT",
+            "context_uncertain": true,
+            "evidence": {
+              "file": "raw/trace.log",
+              "line": 11,
+              "end_line": 11
+            }
+          },
+          "access_mode": "X_OK"
+        }
+      ],
+      "show_sha256": "1ac477ba6daca300fb5ac716442fb8f6090bd16b8c27ff25f7ee8465689c734c",
+      "events_sha256": "40dc1eddbd3eb1c4c1ec1479b4c8b83266456c0e35bfc97c75e8943fb34e0065"
+    },
+    "bad-repeat": {
+      "state": "completed",
+      "target_exit": 1,
+      "target_signal": null,
+      "collector_exit": 1,
+      "collector_signal": null,
+      "capture": "partial",
+      "storage": "verified",
+      "events": 2560,
+      "warnings": [
+        {
+          "category": "cwd.path_unresolved",
+          "text": "raw/trace.log:11: path context unresolved; last observed CWD is not a verified current path; consult raw evidence",
+          "event": {
+            "kind": "file",
+            "operation": "access",
+            "path": "relative:cmake [cwd unresolved]",
+            "outcome": "ENOENT",
+            "context_uncertain": true,
+            "evidence": {
+              "file": "raw/trace.log",
+              "line": 11,
+              "end_line": 11
+            }
+          },
+          "access_mode": "X_OK"
+        }
+      ],
+      "show_sha256": "88af30c0540566b332ac46f6adf793508e3b69a1b553e0eeb2eb795da053735f",
+      "events_sha256": "bac74416bb014a8c44d3877b1708fbd067f03bca323f6027164040d4c13144bb"
+    }
+  },
+  "comparisons": {
+    "control": {
+      "observed_differences": true,
+      "changes": 2262,
+      "exit_code": 3,
+      "reliability": {
+        "left": {
+          "capture": "incomplete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "incomplete",
+          "storage": "verified"
+        }
+      },
+      "categories": {
+        "New file access": 1131,
+        "Removed file access": 1131
+      },
+      "warnings": [
+        "good: state=completed, 1 parser warnings; inspect metadata.json",
+        "repeat: state=completed, 1 parser warnings; inspect metadata.json"
+      ],
+      "top5": [
+        {
+          "category": "New file access",
+          "subject": "${CASE}/build/CMakeFiles/CMakeScratch/TryCompile-0NMVD4/CMakeLists.txt (access)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 13711,
+              "end_line": 13711
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 13713,
+              "end_line": 13713
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 13870,
+              "end_line": 13870
+            }
+          ]
+        },
+        {
+          "category": "New file access",
+          "subject": "${CASE}/build/CMakeFiles/CMakeScratch/TryCompile-0NMVD4/CheckFunctionExists.c (access)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 13896,
+              "end_line": 13896
+            }
+          ]
+        },
+        {
+          "category": "New file access",
+          "subject": "${CASE}/build/CMakeFiles/CMakeScratch/TryCompile-0NMVD4/cmTC_42b94 (access)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 14426,
+              "end_line": 14426
+            }
+          ]
+        },
+        {
+          "category": "New file access",
+          "subject": "${CASE}/build/CMakeFiles/CMakeScratch/TryCompile-0NMVD4/cmTC_42b94_loc (access)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 14424,
+              "end_line": 14424
+            }
+          ]
+        },
+        {
+          "category": "New file access",
+          "subject": "${CASE}/build/CMakeFiles/CMakeScratch/TryCompile-3Dl0Kh/CMakeLists.txt (access)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 12193,
+              "end_line": 12193
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 12195,
+              "end_line": 12195
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 12352,
+              "end_line": 12352
+            }
+          ]
+        }
+      ],
+      "full_json_sha256": "4bb32b20ce6a23a7fea132514daa09c8bf83476a8afa746260baaa7d989879ff"
+    },
+    "comparison": {
+      "observed_differences": true,
+      "changes": 2072,
+      "exit_code": 3,
+      "reliability": {
+        "left": {
+          "capture": "incomplete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "incomplete",
+          "storage": "verified"
+        }
+      },
+      "categories": {
+        "Executable changes": 2,
+        "Execution attempt changes": 2,
+        "Exit status": 1,
+        "New file access": 438,
+        "Removed file access": 1629
+      },
+      "warnings": [
+        "good: state=completed, 1 parser warnings; inspect metadata.json",
+        "bad: state=completed, 1 parser warnings; inspect metadata.json"
+      ],
+      "top5": [
+        {
+          "category": "Exit status",
+          "subject": "",
+          "detail_group": null,
+          "left": [
+            "code=Some(0), signal=None"
+          ],
+          "right": [
+            "code=Some(1), signal=None"
+          ],
+          "left_evidence": [],
+          "right_evidence": []
+        },
+        {
+          "category": "Execution attempt changes",
+          "subject": "${WORK}/tools/cmake-4.0.3/lib/python3.12/site-packages/cmake/data/bin/as (execve)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "ENOENT"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 358,
+              "end_line": 358
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 852,
+              "end_line": 852
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 1610,
+              "end_line": 1610
+            }
+          ]
+        },
+        {
+          "category": "Executable changes",
+          "subject": "${WORK}/tools/cmake-4.0.3/lib/python3.12/site-packages/cmake/data/bin/cmake (execve)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 1,
+              "end_line": 1
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 1501,
+              "end_line": 1501
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 1549,
+              "end_line": 1549
+            }
+          ]
+        },
+        {
+          "category": "New file access",
+          "subject": "${CASE}/build/CMakeFiles/4.0.3/CMakeCCompiler.cmake (access)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "ENOENT",
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 140,
+              "end_line": 140
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 630,
+              "end_line": 630
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 1383,
+              "end_line": 1383
+            }
+          ]
+        },
+        {
+          "category": "New file access",
+          "subject": "${CASE}/build/CMakeFiles/4.0.3/CMakeCXXCompiler.cmake (access)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "ENOENT",
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 632,
+              "end_line": 632
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 1273,
+              "end_line": 1273
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 2060,
+              "end_line": 2060
+            }
+          ]
+        }
+      ],
+      "full_json_sha256": "249028c04e0710882d4181454d21be55209e9cd882d95cc6dda3ecda89221baa"
+    },
+    "bad-control": {
+      "observed_differences": true,
+      "changes": 242,
+      "exit_code": 3,
+      "reliability": {
+        "left": {
+          "capture": "incomplete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "incomplete",
+          "storage": "verified"
+        }
+      },
+      "categories": {
+        "New file access": 121,
+        "Removed file access": 121
+      },
+      "warnings": [
+        "bad: state=completed, 1 parser warnings; inspect metadata.json",
+        "bad-repeat: state=completed, 1 parser warnings; inspect metadata.json"
+      ],
+      "top5": [
+        {
+          "category": "New file access",
+          "subject": "${CASE}/build/CMakeFiles/CMakeScratch/TryCompile-5DkS8c/CMakeLists.txt (access)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 1367,
+              "end_line": 1367
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 1369,
+              "end_line": 1369
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 1370,
+              "end_line": 1370
+            }
+          ]
+        },
+        {
+          "category": "New file access",
+          "subject": "${CASE}/build/CMakeFiles/CMakeScratch/TryCompile-5DkS8c/cmTC_98ad4 (access)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 1825,
+              "end_line": 1825
+            }
+          ]
+        },
+        {
+          "category": "New file access",
+          "subject": "${CASE}/build/CMakeFiles/CMakeScratch/TryCompile-5DkS8c/cmTC_98ad4_loc (access)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 1823,
+              "end_line": 1823
+            }
+          ]
+        },
+        {
+          "category": "New file access",
+          "subject": "${CASE}/build/CMakeFiles/CMakeScratch/TryCompile-vcXWhX/CMakeLists.txt (access)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 2044,
+              "end_line": 2044
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 2046,
+              "end_line": 2046
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 2047,
+              "end_line": 2047
+            }
+          ]
+        },
+        {
+          "category": "New file access",
+          "subject": "${CASE}/build/CMakeFiles/CMakeScratch/TryCompile-vcXWhX/cmTC_6ba14 (access)",
+          "detail_group": null,
+          "left": [],
+          "right": [
+            "success"
+          ],
+          "left_evidence": [],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 2514,
+              "end_line": 2514
+            }
+          ]
+        }
+      ],
+      "full_json_sha256": "878cec65218be55278dec8d05c35b4138d5723a881b0b48dbd27aaf4d81a03b4"
+    }
+  },
+  "clue_ranks": [
+    {
+      "name": "new_cmake_executable",
+      "rank": 3,
+      "required": true
+    },
+    {
+      "name": "old_cmake_executable",
+      "rank": 352,
+      "required": false
+    }
+  ],
+  "strict_top5_hit": true,
+  "conclusion_basis": "actual capture; investigator assessment, not a blind user trial",
+  "target_output_excerpts": {
+    "good_makefile_created": true,
+    "bad_stderr": [
+      "CMake Error at CMakeLists.txt:6 (cmake_minimum_required):",
+      "Compatibility with CMake < 3.5 has been removed from CMake."
+    ]
+  }
+}

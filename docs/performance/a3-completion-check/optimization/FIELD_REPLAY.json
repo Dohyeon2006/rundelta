@@ -1,0 +1,122 @@
+[
+  {
+    "case": "python-venv-good",
+    "identical": true,
+    "events": 190,
+    "returncode": 0,
+    "warnings": 0,
+    "sha256": "7126d2144105d3f2988b1cbcf17284757cab03a8f3c68b1aeeb9f1f86b2ba065"
+  },
+  {
+    "case": "python-venv-repeat",
+    "identical": true,
+    "events": 190,
+    "returncode": 0,
+    "warnings": 0,
+    "sha256": "daf91e2759e1b86e2f1b2d7d78957c5c1509627e529ef923de4b47ff90d39615"
+  },
+  {
+    "case": "python-venv-bad",
+    "identical": true,
+    "events": 69,
+    "returncode": 1,
+    "warnings": 0,
+    "sha256": "1fd874c49bd047535cca0f4e12f1da45c27459a760add30bd8a50c0c86df0e4c"
+  },
+  {
+    "case": "pkg-config-good",
+    "identical": true,
+    "events": 89,
+    "returncode": 0,
+    "warnings": 1,
+    "sha256": "37d961e3d610aec5987bedbaa92c7d4f6b4828b4c0bd31c1c921f6fd076820a2"
+  },
+  {
+    "case": "pkg-config-repeat",
+    "identical": true,
+    "events": 89,
+    "returncode": 0,
+    "warnings": 1,
+    "sha256": "6424aa0586324760e87dc97fdbffb734183f570e61f08add55c5c487266187ef"
+  },
+  {
+    "case": "pkg-config-bad",
+    "identical": true,
+    "events": 89,
+    "returncode": 1,
+    "warnings": 1,
+    "sha256": "1241126fa9c4c8c392f89f40f1432b3999368f149d8d6d3158bc1fe42de1f4d7"
+  },
+  {
+    "case": "git-identity-good",
+    "identical": true,
+    "events": 133,
+    "returncode": 0,
+    "warnings": 18,
+    "sha256": "12ea51c37edd7dc1f71d8ff39370a82b7ecfa3bfcad0d10bbc11e0e559a3ff07"
+  },
+  {
+    "case": "git-identity-repeat",
+    "identical": true,
+    "events": 133,
+    "returncode": 0,
+    "warnings": 18,
+    "sha256": "84c1d4c24dd377720285c99356b58073d0e9cda4de21cd44fed5e4ab1fb44cda"
+  },
+  {
+    "case": "git-identity-bad",
+    "identical": true,
+    "events": 36,
+    "returncode": 128,
+    "warnings": 4,
+    "sha256": "3e0f5defa72e8e04185e4b8c7039d54d6cbe693cb3bb401355b6242d5144bd55"
+  },
+  {
+    "case": "gcc-header-good",
+    "identical": true,
+    "events": 1374,
+    "returncode": 0,
+    "warnings": 0,
+    "sha256": "7da61f564c23c9aca623f1c3d33df7368a930aaf9a1a4202c9bdc71df6a9a103"
+  },
+  {
+    "case": "gcc-header-repeat",
+    "identical": true,
+    "events": 1374,
+    "returncode": 0,
+    "warnings": 0,
+    "sha256": "6825f20592c86270807d076f01e8599fc907fd64bb035540d5693514d73353e7"
+  },
+  {
+    "case": "gcc-header-bad",
+    "identical": true,
+    "events": 85,
+    "returncode": 1,
+    "warnings": 0,
+    "sha256": "bf2f5c9af4dcd3ce4bdb86de9c083974ff0b066f235ffae355222635d16190bb"
+  },
+  {
+    "case": "cargo-linker-good",
+    "identical": true,
+    "events": 14646,
+    "returncode": 0,
+    "warnings": 1,
+    "sha256": "8892a87b2c9462343402c44ea6e61fcad938a1b1d4a08a704319522e34e48f2b"
+  },
+  {
+    "case": "cargo-linker-repeat",
+    "identical": true,
+    "events": 14646,
+    "returncode": 0,
+    "warnings": 1,
+    "sha256": "bb7775c6e979727b1d1410637c9c198b29e016439bd115f09ea1b801c7d31d9f"
+  },
+  {
+    "case": "cargo-linker-bad",
+    "identical": true,
+    "events": 776,
+    "returncode": 101,
+    "warnings": 1,
+    "sha256": "6c303e35758db30ddc6cce09ddbab5c80350045abaaa5b733c221373a909796b"
+  }
+]

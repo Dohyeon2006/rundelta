@@ -1,0 +1,486 @@
+{
+  "date": "2026-09-20",
+  "environment": {
+    "kernel": "7.2.5-200.fc44.x86_64",
+    "platform": "Linux x86_64",
+    "glibc": "2.43",
+    "gcc": "16.2.1",
+    "strace": "6.16",
+    "strace_options_from_local_help": true
+  },
+  "original": {
+    "run_alias": "external-alpha-replay/spades/bad-v2",
+    "role": "successful installation-path control, not issue-triggering bad-v3",
+    "tid": 74952,
+    "thread_group_leader": 74943,
+    "root_pid": 74687,
+    "exec_basename": "spades-corrector-core",
+    "raw_lines": 24464,
+    "raw_newline_terminated": true,
+    "raw_sha256_at_attribution_start": "443b334084678e29707855d281fb034dd5cf20e305dac00e5e8ad6b5e5c66579",
+    "raw_checksum_not_in_original_finalization": true,
+    "same_tid_resumed_count": 0,
+    "subsequent_lines": 363,
+    "killed_status_count": 0,
+    "evidence": [
+      {
+        "line": 23927,
+        "text": "74943 clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=<ADDRESS>, parent_tid=<ADDRESS>, exit_signal=0, stack=<ADDRESS>, stack_size=<ADDRESS>, tls=<ADDRESS>} => {parent_tid=[74952]}, 88) = 74952"
+      },
+      {
+        "line": 24101,
+        "text": "74952 ???( <unfinished ...>"
+      },
+      {
+        "line": 24107,
+        "text": "74952 +++ exited with 0 +++"
+      },
+      {
+        "line": 24117,
+        "text": "74943 +++ exited with 0 +++"
+      },
+      {
+        "line": 24464,
+        "text": "74687 +++ exited with 0 +++"
+      }
+    ],
+    "metadata": {
+      "state": "completed",
+      "completeness": "partial",
+      "exit_code": 0,
+      "signal": null,
+      "collector_exit_code": 0,
+      "collector_signal": null,
+      "warnings": [
+        "raw/trace.log:24101: unfinished call at end of trace",
+        "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+      ],
+      "parsed_events": 15437
+    },
+    "parser_replay": {
+      "event_count": 15437,
+      "all_events_equal": true,
+      "all_warnings_equal": true,
+      "raw_lines": 24464,
+      "tid_events": [
+        {
+          "argv": null,
+          "child_pid": null,
+          "context_uncertain": false,
+          "cwd_before": null,
+          "evidence": {
+            "end_line": 24107,
+            "file": "raw/trace.log",
+            "line": 24107
+          },
+          "kind": "exit",
+          "operation": "exit",
+          "outcome": "+++ exited with 0 +++",
+          "path": null,
+          "pid": "74952",
+          "schema_version": 2
+        }
+      ],
+      "warnings": [
+        "raw/trace.log:24101: unfinished call at end of trace",
+        "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+      ]
+    },
+    "read_with_current_cli": {
+      "exit_code": 0,
+      "storage": "verified",
+      "completeness": "partial",
+      "warnings_equal": true
+    }
+  },
+  "groups": [
+    {
+      "group": "joined-getpid",
+      "path": "RunDelta record, unchanged product options",
+      "runs": 12,
+      "workers": 16,
+      "runs_with_unknown": 0,
+      "unknown_line_count": 0,
+      "unfinished_warning_count": 0,
+      "record_exit_codes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "capture": [
+        "partial",
+        "partial",
+        "partial",
+        "partial",
+        "partial",
+        "partial",
+        "partial",
+        "partial",
+        "partial",
+        "partial",
+        "partial",
+        "partial"
+      ]
+    },
+    {
+      "group": "group-getpid",
+      "path": "RunDelta record, unchanged product options",
+      "runs": 12,
+      "workers": 16,
+      "runs_with_unknown": 9,
+      "unknown_line_count": 23,
+      "unfinished_warning_count": 23,
+      "record_exit_codes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "capture": [
+        "partial",
+        "partial",
+        "partial",
+        "partial",
+        "partial",
+        "partial",
+        "partial",
+        "partial",
+        "partial",
+        "partial",
+        "partial",
+        "partial"
+      ]
+    },
+    {
+      "group": "group-open",
+      "path": "RunDelta record, unchanged product options",
+      "runs": 12,
+      "workers": 16,
+      "runs_with_unknown": 6,
+      "unknown_line_count": 15,
+      "unfinished_warning_count": 58,
+      "record_exit_codes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "capture": [
+        "partial",
+        "partial",
+        "partial",
+        "partial",
+        "partial",
+        "partial",
+        "partial",
+        "partial",
+        "partial",
+        "partial",
+        "partial",
+        "partial"
+      ]
+    },
+    {
+      "group": "minimal",
+      "path": "direct strace",
+      "runs": 24,
+      "workers": 1,
+      "runs_with_unknown": 0,
+      "unknown_line_count": 0,
+      "exit_codes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "group": "standalone",
+      "path": "direct strace",
+      "runs": 12,
+      "workers": 16,
+      "runs_with_unknown": 6,
+      "unknown_line_count": 15,
+      "exit_codes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "group": "nested",
+      "path": "direct strace under outer strace",
+      "runs": 12,
+      "workers": 16,
+      "runs_with_unknown": 9,
+      "unknown_line_count": 9,
+      "exit_codes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "group": "reduced-2",
+      "path": "direct strace",
+      "runs": 24,
+      "workers": 2,
+      "runs_with_unknown": 3,
+      "unknown_line_count": 3,
+      "exit_codes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "group": "reduced-4",
+      "path": "direct strace",
+      "runs": 24,
+      "workers": 4,
+      "runs_with_unknown": 15,
+      "unknown_line_count": 19,
+      "exit_codes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "nested_evidence": {
+    "sample": "nested-00",
+    "inner_evidence": [
+      {
+        "line": 21,
+        "text": "79847 ???( <unfinished ...>"
+      }
+    ],
+    "outer_evidence": [
+      {
+        "line": 6,
+        "text": "ptrace(PTRACE_SEIZE, 79828, NULL, 0)    = -1 EPERM (Operation not permitted)"
+      },
+      {
+        "line": 5390,
+        "text": "ptrace(PTRACE_GET_SYSCALL_INFO, 79847, 88, <ADDRESS>) = -1 ESRCH (No such process)"
+      }
+    ],
+    "matched_unknown_tids": 9,
+    "matched_get_syscall_info_esrch": 9,
+    "outer_seize_eperm_is_strace_self_probe": true
+  },
+  "known_unfinished_example": {
+    "run": "group-open-00",
+    "line": 552,
+    "decoded_redacted_excerpt": "78841 openat(AT_FDCWD<${PROBE_WORK}>, \"/dev/null\", O_RDONLY <unfinished ...>",
+    "exit_line": 564,
+    "exit_text": "78841 +++ exited with 0 +++"
+  },
+  "source_verification": {
+    "strace_v6_16_local_syscall_c_equals_upstream": true,
+    "strace_v6_16_local_strace_c_equals_upstream": true
+  },
+  "conclusions": {
+    "original_syscall_identity": "unrecoverable: no name or number, ??? is a strace placeholder",
+    "probe_mechanism": "GET_SYSCALL_INFO ESRCH during deliberate normal exit_group while workers issue syscalls",
+    "original_mechanism": "consistent with probe and matched upstream implementation; original ptrace errno not recorded",
+    "parser_new_syscall_support_required": false,
+    "spades_becomes_complete_if_only_unknown_resolved": false
+  },
+  "public_script_replay": {
+    "exit_code": 0,
+    "runs": 132,
+    "groups": [
+      {
+        "group": "joined-getpid",
+        "runs": 12,
+        "runs_with_unknown": 0,
+        "unknown_lines": 0,
+        "all_exit_zero": true,
+        "unfinished_warning_count": 0
+      },
+      {
+        "group": "group-getpid",
+        "runs": 12,
+        "runs_with_unknown": 10,
+        "unknown_lines": 26,
+        "all_exit_zero": true,
+        "unfinished_warning_count": 26
+      },
+      {
+        "group": "group-open",
+        "runs": 12,
+        "runs_with_unknown": 9,
+        "unknown_lines": 30,
+        "all_exit_zero": true,
+        "unfinished_warning_count": 121
+      },
+      {
+        "group": "minimal",
+        "runs": 24,
+        "runs_with_unknown": 0,
+        "unknown_lines": 0,
+        "all_exit_zero": true,
+        "unfinished_warning_count": 0
+      },
+      {
+        "group": "standalone",
+        "runs": 12,
+        "runs_with_unknown": 9,
+        "unknown_lines": 26,
+        "all_exit_zero": true,
+        "unfinished_warning_count": 0
+      },
+      {
+        "group": "nested",
+        "runs": 12,
+        "runs_with_unknown": 10,
+        "unknown_lines": 10,
+        "all_exit_zero": true,
+        "unfinished_warning_count": 0
+      },
+      {
+        "group": "reduced-2",
+        "runs": 24,
+        "runs_with_unknown": 2,
+        "unknown_lines": 2,
+        "all_exit_zero": true,
+        "unfinished_warning_count": 0
+      },
+      {
+        "group": "reduced-4",
+        "runs": 24,
+        "runs_with_unknown": 10,
+        "unknown_lines": 11,
+        "all_exit_zero": true,
+        "unfinished_warning_count": 0
+      }
+    ],
+    "original_parser_equivalence_passed": true
+  },
+  "validation": {
+    "expanded_legacy_validator_exit_code": 1,
+    "expanded_legacy_validator_failure": "AssertionError at exact file inventory: only six attribution files are additional",
+    "unexpected_files": [
+      "attribution/README.md",
+      "attribution/RESULTS.json",
+      "attribution/original-materials.json",
+      "attribution/probe.c",
+      "attribution/probe.py",
+      "attribution/verify.py"
+    ],
+    "original_26_file_snapshot_exit_code": 0,
+    "combined_scope_redaction_validator_exit_code": 0
+  },
+  "preservation": {
+    "protected_files_unchanged": 126,
+    "staged_binary_diff_unchanged": true,
+    "original_alpha_file_count_unchanged": 26,
+    "original_raw_sha256_unchanged_during_attribution": true
+  }
+}

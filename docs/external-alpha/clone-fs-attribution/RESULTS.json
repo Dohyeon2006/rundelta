@@ -1,0 +1,2166 @@
+{
+  "date": "2026-09-20",
+  "environment": {
+    "platform": "Linux x86_64 / Fedora 44",
+    "kernel": "7.2.5-200.fc44.x86_64",
+    "glibc": "2.43",
+    "gcc": "16.2.1",
+    "strace": "6.16"
+  },
+  "rundelta_commit": "dcbe7e36c26310dd54281a50a184653ca0984c48",
+  "probe_sha256": "90909428b572252449f2dc1152ef8eaf0d0550b36c3865bfdbde1bc7b21cb6c0",
+  "plan_sha256": "1656e6bb58bc02d158636c112c29cff711161c9014ecebac2b274eec8e0fe66e",
+  "groups": [
+    {
+      "case": "normal",
+      "mode": "normal",
+      "operation": "none",
+      "samples": 3,
+      "expected_marker": "A",
+      "marker_checks_passed": true,
+      "expected_open_path_observed": true,
+      "clone_fs_raw": [
+        false,
+        false,
+        false
+      ],
+      "record_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "target_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "collector_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "completeness": [
+        "complete_for_supported_events",
+        "complete_for_supported_events",
+        "complete_for_supported_events"
+      ],
+      "storage": [
+        "verified",
+        "verified",
+        "verified"
+      ],
+      "first_payload_event": {
+        "schema_version": 2,
+        "pid": "83705",
+        "kind": "file",
+        "operation": "openat",
+        "path": "${WORK}/A/payload.txt",
+        "outcome": "success",
+        "evidence": {
+          "file": "raw/trace.log",
+          "line": 5,
+          "end_line": 5
+        },
+        "argv": null,
+        "child_pid": null,
+        "cwd_before": "${WORK}/A",
+        "context_uncertain": false
+      },
+      "warnings_by_sample": [
+        [],
+        [],
+        []
+      ],
+      "baseline_diff_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "repeat_comparison": {
+        "case": "normal",
+        "exit_code": 0,
+        "observed_differences": false,
+        "reliability": {
+          "left": {
+            "capture": "complete",
+            "storage": "verified"
+          },
+          "right": {
+            "capture": "complete",
+            "storage": "verified"
+          }
+        },
+        "warnings": [],
+        "changes": 0
+      }
+    },
+    {
+      "case": "shared-stable",
+      "mode": "pthread",
+      "operation": "none",
+      "samples": 3,
+      "expected_marker": "A",
+      "marker_checks_passed": true,
+      "expected_open_path_observed": true,
+      "clone_fs_raw": [
+        true,
+        true,
+        true
+      ],
+      "record_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "target_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "collector_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "completeness": [
+        "partial",
+        "partial",
+        "partial"
+      ],
+      "storage": [
+        "verified",
+        "verified",
+        "verified"
+      ],
+      "first_payload_event": {
+        "schema_version": 2,
+        "pid": "83736",
+        "kind": "file",
+        "operation": "openat",
+        "path": "${WORK}/A/payload.txt",
+        "outcome": "success",
+        "evidence": {
+          "file": "raw/trace.log",
+          "line": 6,
+          "end_line": 6
+        },
+        "argv": null,
+        "child_pid": null,
+        "cwd_before": null,
+        "context_uncertain": false
+      },
+      "warnings_by_sample": [
+        [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+        ],
+        [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+        ],
+        [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+        ]
+      ],
+      "baseline_diff_exit_codes": [
+        3,
+        3,
+        3
+      ],
+      "repeat_comparison": {
+        "case": "shared-stable",
+        "exit_code": 3,
+        "observed_differences": false,
+        "reliability": {
+          "left": {
+            "capture": "incomplete",
+            "storage": "verified"
+          },
+          "right": {
+            "capture": "incomplete",
+            "storage": "verified"
+          }
+        },
+        "warnings": [
+          "shared-stable-0: state=completed, 1 parser warnings; inspect metadata.json",
+          "shared-stable-1: state=completed, 1 parser warnings; inspect metadata.json"
+        ],
+        "changes": 0
+      }
+    },
+    {
+      "case": "shared-chdir",
+      "mode": "pthread",
+      "operation": "chdir",
+      "samples": 3,
+      "expected_marker": "B",
+      "marker_checks_passed": true,
+      "expected_open_path_observed": true,
+      "clone_fs_raw": [
+        true,
+        true,
+        true
+      ],
+      "record_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "target_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "collector_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "completeness": [
+        "partial",
+        "partial",
+        "partial"
+      ],
+      "storage": [
+        "verified",
+        "verified",
+        "verified"
+      ],
+      "first_payload_event": {
+        "schema_version": 2,
+        "pid": "83769",
+        "kind": "file",
+        "operation": "openat",
+        "path": "${WORK}/B/payload.txt",
+        "outcome": "success",
+        "evidence": {
+          "file": "raw/trace.log",
+          "line": 7,
+          "end_line": 7
+        },
+        "argv": null,
+        "child_pid": null,
+        "cwd_before": null,
+        "context_uncertain": false
+      },
+      "warnings_by_sample": [
+        [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+        ],
+        [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+        ],
+        [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+        ]
+      ],
+      "baseline_diff_exit_codes": [
+        3,
+        3,
+        3
+      ],
+      "repeat_comparison": {
+        "case": "shared-chdir",
+        "exit_code": 3,
+        "observed_differences": false,
+        "reliability": {
+          "left": {
+            "capture": "incomplete",
+            "storage": "verified"
+          },
+          "right": {
+            "capture": "incomplete",
+            "storage": "verified"
+          }
+        },
+        "warnings": [
+          "shared-chdir-0: state=completed, 1 parser warnings; inspect metadata.json",
+          "shared-chdir-1: state=completed, 1 parser warnings; inspect metadata.json"
+        ],
+        "changes": 0
+      }
+    },
+    {
+      "case": "private-chdir",
+      "mode": "fork",
+      "operation": "chdir",
+      "samples": 3,
+      "expected_marker": "A",
+      "marker_checks_passed": true,
+      "expected_open_path_observed": true,
+      "clone_fs_raw": [
+        false,
+        false,
+        false
+      ],
+      "record_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "target_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "collector_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "completeness": [
+        "complete_for_supported_events",
+        "complete_for_supported_events",
+        "complete_for_supported_events"
+      ],
+      "storage": [
+        "verified",
+        "verified",
+        "verified"
+      ],
+      "first_payload_event": {
+        "schema_version": 2,
+        "pid": "83802",
+        "kind": "file",
+        "operation": "openat",
+        "path": "${WORK}/A/payload.txt",
+        "outcome": "success",
+        "evidence": {
+          "file": "raw/trace.log",
+          "line": 7,
+          "end_line": 7
+        },
+        "argv": null,
+        "child_pid": null,
+        "cwd_before": "${WORK}/A",
+        "context_uncertain": false
+      },
+      "warnings_by_sample": [
+        [],
+        [],
+        []
+      ],
+      "baseline_diff_exit_codes": [
+        1,
+        1,
+        1
+      ],
+      "repeat_comparison": {
+        "case": "private-chdir",
+        "exit_code": 0,
+        "observed_differences": false,
+        "reliability": {
+          "left": {
+            "capture": "complete",
+            "storage": "verified"
+          },
+          "right": {
+            "capture": "complete",
+            "storage": "verified"
+          }
+        },
+        "warnings": [],
+        "changes": 0
+      }
+    },
+    {
+      "case": "shared-process-chdir",
+      "mode": "clonefs",
+      "operation": "chdir",
+      "samples": 3,
+      "expected_marker": "B",
+      "marker_checks_passed": true,
+      "expected_open_path_observed": true,
+      "clone_fs_raw": [
+        true,
+        true,
+        true
+      ],
+      "record_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "target_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "collector_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "completeness": [
+        "partial",
+        "partial",
+        "partial"
+      ],
+      "storage": [
+        "verified",
+        "verified",
+        "verified"
+      ],
+      "first_payload_event": {
+        "schema_version": 2,
+        "pid": "83835",
+        "kind": "file",
+        "operation": "openat",
+        "path": "${WORK}/B/payload.txt",
+        "outcome": "success",
+        "evidence": {
+          "file": "raw/trace.log",
+          "line": 7,
+          "end_line": 7
+        },
+        "argv": null,
+        "child_pid": null,
+        "cwd_before": null,
+        "context_uncertain": false
+      },
+      "warnings_by_sample": [
+        [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+        ],
+        [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+        ],
+        [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+        ]
+      ],
+      "baseline_diff_exit_codes": [
+        3,
+        3,
+        3
+      ],
+      "repeat_comparison": {
+        "case": "shared-process-chdir",
+        "exit_code": 3,
+        "observed_differences": false,
+        "reliability": {
+          "left": {
+            "capture": "incomplete",
+            "storage": "verified"
+          },
+          "right": {
+            "capture": "incomplete",
+            "storage": "verified"
+          }
+        },
+        "warnings": [
+          "shared-process-chdir-0: state=completed, 1 parser warnings; inspect metadata.json",
+          "shared-process-chdir-1: state=completed, 1 parser warnings; inspect metadata.json"
+        ],
+        "changes": 0
+      }
+    },
+    {
+      "case": "shared-fchdir",
+      "mode": "pthread",
+      "operation": "fchdir",
+      "samples": 3,
+      "expected_marker": "B",
+      "marker_checks_passed": true,
+      "expected_open_path_observed": true,
+      "clone_fs_raw": [
+        true,
+        true,
+        true
+      ],
+      "record_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "target_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "collector_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "completeness": [
+        "partial",
+        "partial",
+        "partial"
+      ],
+      "storage": [
+        "verified",
+        "verified",
+        "verified"
+      ],
+      "first_payload_event": {
+        "schema_version": 2,
+        "pid": "83868",
+        "kind": "file",
+        "operation": "openat",
+        "path": "${WORK}/B/payload.txt",
+        "outcome": "success",
+        "evidence": {
+          "file": "raw/trace.log",
+          "line": 8,
+          "end_line": 8
+        },
+        "argv": null,
+        "child_pid": null,
+        "cwd_before": null,
+        "context_uncertain": false
+      },
+      "warnings_by_sample": [
+        [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+        ],
+        [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+        ],
+        [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+        ]
+      ],
+      "baseline_diff_exit_codes": [
+        3,
+        3,
+        3
+      ],
+      "repeat_comparison": {
+        "case": "shared-fchdir",
+        "exit_code": 3,
+        "observed_differences": false,
+        "reliability": {
+          "left": {
+            "capture": "incomplete",
+            "storage": "verified"
+          },
+          "right": {
+            "capture": "incomplete",
+            "storage": "verified"
+          }
+        },
+        "warnings": [
+          "shared-fchdir-0: state=completed, 1 parser warnings; inspect metadata.json",
+          "shared-fchdir-1: state=completed, 1 parser warnings; inspect metadata.json"
+        ],
+        "changes": 0
+      }
+    },
+    {
+      "case": "private-fchdir",
+      "mode": "fork",
+      "operation": "fchdir",
+      "samples": 3,
+      "expected_marker": "A",
+      "marker_checks_passed": true,
+      "expected_open_path_observed": true,
+      "clone_fs_raw": [
+        false,
+        false,
+        false
+      ],
+      "record_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "target_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "collector_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "completeness": [
+        "complete_for_supported_events",
+        "complete_for_supported_events",
+        "complete_for_supported_events"
+      ],
+      "storage": [
+        "verified",
+        "verified",
+        "verified"
+      ],
+      "first_payload_event": {
+        "schema_version": 2,
+        "pid": "83908",
+        "kind": "file",
+        "operation": "openat",
+        "path": "${WORK}/A/payload.txt",
+        "outcome": "success",
+        "evidence": {
+          "file": "raw/trace.log",
+          "line": 8,
+          "end_line": 8
+        },
+        "argv": null,
+        "child_pid": null,
+        "cwd_before": "${WORK}/A",
+        "context_uncertain": false
+      },
+      "warnings_by_sample": [
+        [],
+        [],
+        []
+      ],
+      "baseline_diff_exit_codes": [
+        1,
+        1,
+        1
+      ],
+      "repeat_comparison": {
+        "case": "private-fchdir",
+        "exit_code": 0,
+        "observed_differences": false,
+        "reliability": {
+          "left": {
+            "capture": "complete",
+            "storage": "verified"
+          },
+          "right": {
+            "capture": "complete",
+            "storage": "verified"
+          }
+        },
+        "warnings": [],
+        "changes": 0
+      }
+    },
+    {
+      "case": "shared-fail-chdir",
+      "mode": "pthread",
+      "operation": "fail-chdir",
+      "samples": 3,
+      "expected_marker": "A",
+      "marker_checks_passed": true,
+      "expected_open_path_observed": true,
+      "clone_fs_raw": [
+        true,
+        true,
+        true
+      ],
+      "record_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "target_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "collector_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "completeness": [
+        "partial",
+        "partial",
+        "partial"
+      ],
+      "storage": [
+        "verified",
+        "verified",
+        "verified"
+      ],
+      "first_payload_event": {
+        "schema_version": 2,
+        "pid": "83941",
+        "kind": "file",
+        "operation": "openat",
+        "path": "${WORK}/A/payload.txt",
+        "outcome": "success",
+        "evidence": {
+          "file": "raw/trace.log",
+          "line": 7,
+          "end_line": 7
+        },
+        "argv": null,
+        "child_pid": null,
+        "cwd_before": null,
+        "context_uncertain": false
+      },
+      "warnings_by_sample": [
+        [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+        ],
+        [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+        ],
+        [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+        ]
+      ],
+      "baseline_diff_exit_codes": [
+        3,
+        3,
+        3
+      ],
+      "repeat_comparison": {
+        "case": "shared-fail-chdir",
+        "exit_code": 3,
+        "observed_differences": false,
+        "reliability": {
+          "left": {
+            "capture": "incomplete",
+            "storage": "verified"
+          },
+          "right": {
+            "capture": "incomplete",
+            "storage": "verified"
+          }
+        },
+        "warnings": [
+          "shared-fail-chdir-0: state=completed, 1 parser warnings; inspect metadata.json",
+          "shared-fail-chdir-1: state=completed, 1 parser warnings; inspect metadata.json"
+        ],
+        "changes": 0
+      }
+    },
+    {
+      "case": "private-fail-chdir",
+      "mode": "fork",
+      "operation": "fail-chdir",
+      "samples": 3,
+      "expected_marker": "A",
+      "marker_checks_passed": true,
+      "expected_open_path_observed": true,
+      "clone_fs_raw": [
+        false,
+        false,
+        false
+      ],
+      "record_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "target_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "collector_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "completeness": [
+        "complete_for_supported_events",
+        "complete_for_supported_events",
+        "complete_for_supported_events"
+      ],
+      "storage": [
+        "verified",
+        "verified",
+        "verified"
+      ],
+      "first_payload_event": {
+        "schema_version": 2,
+        "pid": "83974",
+        "kind": "file",
+        "operation": "openat",
+        "path": "${WORK}/A/payload.txt",
+        "outcome": "success",
+        "evidence": {
+          "file": "raw/trace.log",
+          "line": 7,
+          "end_line": 7
+        },
+        "argv": null,
+        "child_pid": null,
+        "cwd_before": "${WORK}/A",
+        "context_uncertain": false
+      },
+      "warnings_by_sample": [
+        [],
+        [],
+        []
+      ],
+      "baseline_diff_exit_codes": [
+        1,
+        1,
+        1
+      ],
+      "repeat_comparison": {
+        "case": "private-fail-chdir",
+        "exit_code": 0,
+        "observed_differences": false,
+        "reliability": {
+          "left": {
+            "capture": "complete",
+            "storage": "verified"
+          },
+          "right": {
+            "capture": "complete",
+            "storage": "verified"
+          }
+        },
+        "warnings": [],
+        "changes": 0
+      }
+    },
+    {
+      "case": "shared-fail-fchdir",
+      "mode": "pthread",
+      "operation": "fail-fchdir",
+      "samples": 3,
+      "expected_marker": "A",
+      "marker_checks_passed": true,
+      "expected_open_path_observed": true,
+      "clone_fs_raw": [
+        true,
+        true,
+        true
+      ],
+      "record_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "target_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "collector_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "completeness": [
+        "partial",
+        "partial",
+        "partial"
+      ],
+      "storage": [
+        "verified",
+        "verified",
+        "verified"
+      ],
+      "first_payload_event": {
+        "schema_version": 2,
+        "pid": "84007",
+        "kind": "file",
+        "operation": "openat",
+        "path": "${WORK}/A/payload.txt",
+        "outcome": "success",
+        "evidence": {
+          "file": "raw/trace.log",
+          "line": 7,
+          "end_line": 7
+        },
+        "argv": null,
+        "child_pid": null,
+        "cwd_before": null,
+        "context_uncertain": false
+      },
+      "warnings_by_sample": [
+        [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled",
+          "raw/trace.log:6: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+        ],
+        [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled",
+          "raw/trace.log:6: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+        ],
+        [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled",
+          "raw/trace.log:6: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+        ]
+      ],
+      "baseline_diff_exit_codes": [
+        3,
+        3,
+        3
+      ],
+      "repeat_comparison": {
+        "case": "shared-fail-fchdir",
+        "exit_code": 3,
+        "observed_differences": false,
+        "reliability": {
+          "left": {
+            "capture": "incomplete",
+            "storage": "verified"
+          },
+          "right": {
+            "capture": "incomplete",
+            "storage": "verified"
+          }
+        },
+        "warnings": [
+          "shared-fail-fchdir-0: state=completed, 2 parser warnings; inspect metadata.json",
+          "shared-fail-fchdir-1: state=completed, 2 parser warnings; inspect metadata.json"
+        ],
+        "changes": 0
+      }
+    },
+    {
+      "case": "private-fail-fchdir",
+      "mode": "fork",
+      "operation": "fail-fchdir",
+      "samples": 3,
+      "expected_marker": "A",
+      "marker_checks_passed": true,
+      "expected_open_path_observed": true,
+      "clone_fs_raw": [
+        false,
+        false,
+        false
+      ],
+      "record_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "target_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "collector_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "completeness": [
+        "partial",
+        "partial",
+        "partial"
+      ],
+      "storage": [
+        "verified",
+        "verified",
+        "verified"
+      ],
+      "first_payload_event": {
+        "schema_version": 2,
+        "pid": "84040",
+        "kind": "file",
+        "operation": "openat",
+        "path": "${WORK}/A/payload.txt",
+        "outcome": "success",
+        "evidence": {
+          "file": "raw/trace.log",
+          "line": 7,
+          "end_line": 7
+        },
+        "argv": null,
+        "child_pid": null,
+        "cwd_before": "${WORK}/A",
+        "context_uncertain": false
+      },
+      "warnings_by_sample": [
+        [
+          "raw/trace.log:6: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+        ],
+        [
+          "raw/trace.log:6: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+        ],
+        [
+          "raw/trace.log:6: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+        ]
+      ],
+      "baseline_diff_exit_codes": [
+        3,
+        3,
+        3
+      ],
+      "repeat_comparison": {
+        "case": "private-fail-fchdir",
+        "exit_code": 3,
+        "observed_differences": false,
+        "reliability": {
+          "left": {
+            "capture": "incomplete",
+            "storage": "verified"
+          },
+          "right": {
+            "capture": "incomplete",
+            "storage": "verified"
+          }
+        },
+        "warnings": [
+          "private-fail-fchdir-0: state=completed, 1 parser warnings; inspect metadata.json",
+          "private-fail-fchdir-1: state=completed, 1 parser warnings; inspect metadata.json"
+        ],
+        "changes": 0
+      }
+    },
+    {
+      "case": "mixed-groups",
+      "mode": "mixed",
+      "operation": "chdir",
+      "samples": 3,
+      "expected_marker": "A",
+      "marker_checks_passed": true,
+      "expected_open_path_observed": true,
+      "clone_fs_raw": [
+        true,
+        true,
+        true
+      ],
+      "record_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "target_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "collector_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "completeness": [
+        "partial",
+        "partial",
+        "partial"
+      ],
+      "storage": [
+        "verified",
+        "verified",
+        "verified"
+      ],
+      "first_payload_event": {
+        "schema_version": 2,
+        "pid": "84073",
+        "kind": "file",
+        "operation": "openat",
+        "path": "${WORK}/A/payload.txt",
+        "outcome": "success",
+        "evidence": {
+          "file": "raw/trace.log",
+          "line": 9,
+          "end_line": 9
+        },
+        "argv": null,
+        "child_pid": null,
+        "cwd_before": null,
+        "context_uncertain": false
+      },
+      "warnings_by_sample": [
+        [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+        ],
+        [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+        ],
+        [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+        ]
+      ],
+      "baseline_diff_exit_codes": [
+        3,
+        3,
+        3
+      ],
+      "repeat_comparison": {
+        "case": "mixed-groups",
+        "exit_code": 3,
+        "observed_differences": false,
+        "reliability": {
+          "left": {
+            "capture": "incomplete",
+            "storage": "verified"
+          },
+          "right": {
+            "capture": "incomplete",
+            "storage": "verified"
+          }
+        },
+        "warnings": [
+          "mixed-groups-0: state=completed, 1 parser warnings; inspect metadata.json",
+          "mixed-groups-1: state=completed, 1 parser warnings; inspect metadata.json"
+        ],
+        "changes": 0
+      }
+    },
+    {
+      "case": "normal-access",
+      "mode": "normal",
+      "operation": "none",
+      "samples": 3,
+      "expected_marker": "A",
+      "marker_checks_passed": true,
+      "expected_open_path_observed": true,
+      "clone_fs_raw": [
+        false,
+        false,
+        false
+      ],
+      "record_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "target_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "collector_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "completeness": [
+        "partial",
+        "partial",
+        "partial"
+      ],
+      "storage": [
+        "verified",
+        "verified",
+        "verified"
+      ],
+      "first_payload_event": {
+        "schema_version": 2,
+        "pid": "84108",
+        "kind": "file",
+        "operation": "openat",
+        "path": "${WORK}/A/payload.txt",
+        "outcome": "success",
+        "evidence": {
+          "file": "raw/trace.log",
+          "line": 5,
+          "end_line": 5
+        },
+        "argv": null,
+        "child_pid": null,
+        "cwd_before": "${WORK}/A",
+        "context_uncertain": false
+      },
+      "warnings_by_sample": [
+        [
+          "raw/trace.log:6: path context unresolved; last observed CWD is not a verified current path; consult raw evidence",
+          "raw/trace.log:7: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+        ],
+        [
+          "raw/trace.log:6: path context unresolved; last observed CWD is not a verified current path; consult raw evidence",
+          "raw/trace.log:7: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+        ],
+        [
+          "raw/trace.log:6: path context unresolved; last observed CWD is not a verified current path; consult raw evidence",
+          "raw/trace.log:7: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+        ]
+      ],
+      "baseline_diff_exit_codes": [
+        3,
+        3,
+        3
+      ],
+      "repeat_comparison": {
+        "case": "normal-access",
+        "exit_code": 3,
+        "observed_differences": false,
+        "reliability": {
+          "left": {
+            "capture": "incomplete",
+            "storage": "verified"
+          },
+          "right": {
+            "capture": "incomplete",
+            "storage": "verified"
+          }
+        },
+        "warnings": [
+          "normal-access-0: state=completed, 2 parser warnings; inspect metadata.json",
+          "normal-access-1: state=completed, 2 parser warnings; inspect metadata.json"
+        ],
+        "changes": 0
+      }
+    },
+    {
+      "case": "shared-access",
+      "mode": "pthread",
+      "operation": "chdir",
+      "samples": 3,
+      "expected_marker": "B",
+      "marker_checks_passed": true,
+      "expected_open_path_observed": true,
+      "clone_fs_raw": [
+        true,
+        true,
+        true
+      ],
+      "record_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "target_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "collector_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "completeness": [
+        "partial",
+        "partial",
+        "partial"
+      ],
+      "storage": [
+        "verified",
+        "verified",
+        "verified"
+      ],
+      "first_payload_event": {
+        "schema_version": 2,
+        "pid": "84139",
+        "kind": "file",
+        "operation": "openat",
+        "path": "${WORK}/B/payload.txt",
+        "outcome": "success",
+        "evidence": {
+          "file": "raw/trace.log",
+          "line": 7,
+          "end_line": 7
+        },
+        "argv": null,
+        "child_pid": null,
+        "cwd_before": null,
+        "context_uncertain": false
+      },
+      "warnings_by_sample": [
+        [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled",
+          "raw/trace.log:8: path context unresolved; last observed CWD is not a verified current path; consult raw evidence",
+          "raw/trace.log:9: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+        ],
+        [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled",
+          "raw/trace.log:8: path context unresolved; last observed CWD is not a verified current path; consult raw evidence",
+          "raw/trace.log:9: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+        ],
+        [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled",
+          "raw/trace.log:8: path context unresolved; last observed CWD is not a verified current path; consult raw evidence",
+          "raw/trace.log:9: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+        ]
+      ],
+      "baseline_diff_exit_codes": [
+        3,
+        3,
+        3
+      ],
+      "repeat_comparison": {
+        "case": "shared-access",
+        "exit_code": 3,
+        "observed_differences": false,
+        "reliability": {
+          "left": {
+            "capture": "incomplete",
+            "storage": "verified"
+          },
+          "right": {
+            "capture": "incomplete",
+            "storage": "verified"
+          }
+        },
+        "warnings": [
+          "shared-access-0: state=completed, 3 parser warnings; inspect metadata.json",
+          "shared-access-1: state=completed, 3 parser warnings; inspect metadata.json"
+        ],
+        "changes": 0
+      }
+    },
+    {
+      "case": "private-access",
+      "mode": "fork",
+      "operation": "chdir",
+      "samples": 3,
+      "expected_marker": "A",
+      "marker_checks_passed": true,
+      "expected_open_path_observed": true,
+      "clone_fs_raw": [
+        false,
+        false,
+        false
+      ],
+      "record_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "target_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "collector_exit_codes": [
+        0,
+        0,
+        0
+      ],
+      "completeness": [
+        "partial",
+        "partial",
+        "partial"
+      ],
+      "storage": [
+        "verified",
+        "verified",
+        "verified"
+      ],
+      "first_payload_event": {
+        "schema_version": 2,
+        "pid": "84172",
+        "kind": "file",
+        "operation": "openat",
+        "path": "${WORK}/A/payload.txt",
+        "outcome": "success",
+        "evidence": {
+          "file": "raw/trace.log",
+          "line": 7,
+          "end_line": 7
+        },
+        "argv": null,
+        "child_pid": null,
+        "cwd_before": "${WORK}/A",
+        "context_uncertain": false
+      },
+      "warnings_by_sample": [
+        [
+          "raw/trace.log:8: path context unresolved; last observed CWD is not a verified current path; consult raw evidence",
+          "raw/trace.log:9: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+        ],
+        [
+          "raw/trace.log:8: path context unresolved; last observed CWD is not a verified current path; consult raw evidence",
+          "raw/trace.log:9: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+        ],
+        [
+          "raw/trace.log:8: path context unresolved; last observed CWD is not a verified current path; consult raw evidence",
+          "raw/trace.log:9: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+        ]
+      ],
+      "baseline_diff_exit_codes": [
+        3,
+        3,
+        3
+      ],
+      "repeat_comparison": {
+        "case": "private-access",
+        "exit_code": 3,
+        "observed_differences": false,
+        "reliability": {
+          "left": {
+            "capture": "incomplete",
+            "storage": "verified"
+          },
+          "right": {
+            "capture": "incomplete",
+            "storage": "verified"
+          }
+        },
+        "warnings": [
+          "private-access-0: state=completed, 2 parser warnings; inspect metadata.json",
+          "private-access-1: state=completed, 2 parser warnings; inspect metadata.json"
+        ],
+        "changes": 0
+      }
+    }
+  ],
+  "public_script_replay": {
+    "exit_code": 0,
+    "runs": 45,
+    "groups": [
+      {
+        "case": "normal",
+        "samples": 3,
+        "record_exit_codes": [
+          0,
+          0,
+          0
+        ],
+        "expected_path_checks": [
+          true,
+          true,
+          true
+        ],
+        "completeness": [
+          "complete_for_supported_events",
+          "complete_for_supported_events",
+          "complete_for_supported_events"
+        ],
+        "warnings_by_sample": [
+          [],
+          [],
+          []
+        ],
+        "baseline_diff_exit_codes": [
+          0,
+          0,
+          0
+        ],
+        "repeat": {
+          "case": "normal",
+          "exit_code": 0,
+          "observed_differences": false,
+          "reliability": {
+            "left": {
+              "capture": "complete",
+              "storage": "verified"
+            },
+            "right": {
+              "capture": "complete",
+              "storage": "verified"
+            }
+          }
+        }
+      },
+      {
+        "case": "shared-stable",
+        "samples": 3,
+        "record_exit_codes": [
+          0,
+          0,
+          0
+        ],
+        "expected_path_checks": [
+          true,
+          true,
+          true
+        ],
+        "completeness": [
+          "partial",
+          "partial",
+          "partial"
+        ],
+        "warnings_by_sample": [
+          [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+          ],
+          [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+          ],
+          [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+          ]
+        ],
+        "baseline_diff_exit_codes": [
+          3,
+          3,
+          3
+        ],
+        "repeat": {
+          "case": "shared-stable",
+          "exit_code": 3,
+          "observed_differences": false,
+          "reliability": {
+            "left": {
+              "capture": "incomplete",
+              "storage": "verified"
+            },
+            "right": {
+              "capture": "incomplete",
+              "storage": "verified"
+            }
+          }
+        }
+      },
+      {
+        "case": "shared-chdir",
+        "samples": 3,
+        "record_exit_codes": [
+          0,
+          0,
+          0
+        ],
+        "expected_path_checks": [
+          true,
+          true,
+          true
+        ],
+        "completeness": [
+          "partial",
+          "partial",
+          "partial"
+        ],
+        "warnings_by_sample": [
+          [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+          ],
+          [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+          ],
+          [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+          ]
+        ],
+        "baseline_diff_exit_codes": [
+          3,
+          3,
+          3
+        ],
+        "repeat": {
+          "case": "shared-chdir",
+          "exit_code": 3,
+          "observed_differences": false,
+          "reliability": {
+            "left": {
+              "capture": "incomplete",
+              "storage": "verified"
+            },
+            "right": {
+              "capture": "incomplete",
+              "storage": "verified"
+            }
+          }
+        }
+      },
+      {
+        "case": "private-chdir",
+        "samples": 3,
+        "record_exit_codes": [
+          0,
+          0,
+          0
+        ],
+        "expected_path_checks": [
+          true,
+          true,
+          true
+        ],
+        "completeness": [
+          "complete_for_supported_events",
+          "complete_for_supported_events",
+          "complete_for_supported_events"
+        ],
+        "warnings_by_sample": [
+          [],
+          [],
+          []
+        ],
+        "baseline_diff_exit_codes": [
+          1,
+          1,
+          1
+        ],
+        "repeat": {
+          "case": "private-chdir",
+          "exit_code": 0,
+          "observed_differences": false,
+          "reliability": {
+            "left": {
+              "capture": "complete",
+              "storage": "verified"
+            },
+            "right": {
+              "capture": "complete",
+              "storage": "verified"
+            }
+          }
+        }
+      },
+      {
+        "case": "shared-process-chdir",
+        "samples": 3,
+        "record_exit_codes": [
+          0,
+          0,
+          0
+        ],
+        "expected_path_checks": [
+          true,
+          true,
+          true
+        ],
+        "completeness": [
+          "partial",
+          "partial",
+          "partial"
+        ],
+        "warnings_by_sample": [
+          [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+          ],
+          [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+          ],
+          [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+          ]
+        ],
+        "baseline_diff_exit_codes": [
+          3,
+          3,
+          3
+        ],
+        "repeat": {
+          "case": "shared-process-chdir",
+          "exit_code": 3,
+          "observed_differences": false,
+          "reliability": {
+            "left": {
+              "capture": "incomplete",
+              "storage": "verified"
+            },
+            "right": {
+              "capture": "incomplete",
+              "storage": "verified"
+            }
+          }
+        }
+      },
+      {
+        "case": "shared-fchdir",
+        "samples": 3,
+        "record_exit_codes": [
+          0,
+          0,
+          0
+        ],
+        "expected_path_checks": [
+          true,
+          true,
+          true
+        ],
+        "completeness": [
+          "partial",
+          "partial",
+          "partial"
+        ],
+        "warnings_by_sample": [
+          [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+          ],
+          [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+          ],
+          [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+          ]
+        ],
+        "baseline_diff_exit_codes": [
+          3,
+          3,
+          3
+        ],
+        "repeat": {
+          "case": "shared-fchdir",
+          "exit_code": 3,
+          "observed_differences": false,
+          "reliability": {
+            "left": {
+              "capture": "incomplete",
+              "storage": "verified"
+            },
+            "right": {
+              "capture": "incomplete",
+              "storage": "verified"
+            }
+          }
+        }
+      },
+      {
+        "case": "private-fchdir",
+        "samples": 3,
+        "record_exit_codes": [
+          0,
+          0,
+          0
+        ],
+        "expected_path_checks": [
+          true,
+          true,
+          true
+        ],
+        "completeness": [
+          "complete_for_supported_events",
+          "complete_for_supported_events",
+          "complete_for_supported_events"
+        ],
+        "warnings_by_sample": [
+          [],
+          [],
+          []
+        ],
+        "baseline_diff_exit_codes": [
+          1,
+          1,
+          1
+        ],
+        "repeat": {
+          "case": "private-fchdir",
+          "exit_code": 0,
+          "observed_differences": false,
+          "reliability": {
+            "left": {
+              "capture": "complete",
+              "storage": "verified"
+            },
+            "right": {
+              "capture": "complete",
+              "storage": "verified"
+            }
+          }
+        }
+      },
+      {
+        "case": "shared-fail-chdir",
+        "samples": 3,
+        "record_exit_codes": [
+          0,
+          0,
+          0
+        ],
+        "expected_path_checks": [
+          true,
+          true,
+          true
+        ],
+        "completeness": [
+          "partial",
+          "partial",
+          "partial"
+        ],
+        "warnings_by_sample": [
+          [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+          ],
+          [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+          ],
+          [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+          ]
+        ],
+        "baseline_diff_exit_codes": [
+          3,
+          3,
+          3
+        ],
+        "repeat": {
+          "case": "shared-fail-chdir",
+          "exit_code": 3,
+          "observed_differences": false,
+          "reliability": {
+            "left": {
+              "capture": "incomplete",
+              "storage": "verified"
+            },
+            "right": {
+              "capture": "incomplete",
+              "storage": "verified"
+            }
+          }
+        }
+      },
+      {
+        "case": "private-fail-chdir",
+        "samples": 3,
+        "record_exit_codes": [
+          0,
+          0,
+          0
+        ],
+        "expected_path_checks": [
+          true,
+          true,
+          true
+        ],
+        "completeness": [
+          "complete_for_supported_events",
+          "complete_for_supported_events",
+          "complete_for_supported_events"
+        ],
+        "warnings_by_sample": [
+          [],
+          [],
+          []
+        ],
+        "baseline_diff_exit_codes": [
+          1,
+          1,
+          1
+        ],
+        "repeat": {
+          "case": "private-fail-chdir",
+          "exit_code": 0,
+          "observed_differences": false,
+          "reliability": {
+            "left": {
+              "capture": "complete",
+              "storage": "verified"
+            },
+            "right": {
+              "capture": "complete",
+              "storage": "verified"
+            }
+          }
+        }
+      },
+      {
+        "case": "shared-fail-fchdir",
+        "samples": 3,
+        "record_exit_codes": [
+          0,
+          0,
+          0
+        ],
+        "expected_path_checks": [
+          true,
+          true,
+          true
+        ],
+        "completeness": [
+          "partial",
+          "partial",
+          "partial"
+        ],
+        "warnings_by_sample": [
+          [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled",
+            "raw/trace.log:6: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+          ],
+          [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled",
+            "raw/trace.log:6: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+          ],
+          [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled",
+            "raw/trace.log:6: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+          ]
+        ],
+        "baseline_diff_exit_codes": [
+          3,
+          3,
+          3
+        ],
+        "repeat": {
+          "case": "shared-fail-fchdir",
+          "exit_code": 3,
+          "observed_differences": false,
+          "reliability": {
+            "left": {
+              "capture": "incomplete",
+              "storage": "verified"
+            },
+            "right": {
+              "capture": "incomplete",
+              "storage": "verified"
+            }
+          }
+        }
+      },
+      {
+        "case": "private-fail-fchdir",
+        "samples": 3,
+        "record_exit_codes": [
+          0,
+          0,
+          0
+        ],
+        "expected_path_checks": [
+          true,
+          true,
+          true
+        ],
+        "completeness": [
+          "partial",
+          "partial",
+          "partial"
+        ],
+        "warnings_by_sample": [
+          [
+            "raw/trace.log:6: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+          ],
+          [
+            "raw/trace.log:6: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+          ],
+          [
+            "raw/trace.log:6: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+          ]
+        ],
+        "baseline_diff_exit_codes": [
+          3,
+          3,
+          3
+        ],
+        "repeat": {
+          "case": "private-fail-fchdir",
+          "exit_code": 3,
+          "observed_differences": false,
+          "reliability": {
+            "left": {
+              "capture": "incomplete",
+              "storage": "verified"
+            },
+            "right": {
+              "capture": "incomplete",
+              "storage": "verified"
+            }
+          }
+        }
+      },
+      {
+        "case": "mixed-groups",
+        "samples": 3,
+        "record_exit_codes": [
+          0,
+          0,
+          0
+        ],
+        "expected_path_checks": [
+          true,
+          true,
+          true
+        ],
+        "completeness": [
+          "partial",
+          "partial",
+          "partial"
+        ],
+        "warnings_by_sample": [
+          [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+          ],
+          [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+          ],
+          [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+          ]
+        ],
+        "baseline_diff_exit_codes": [
+          3,
+          3,
+          3
+        ],
+        "repeat": {
+          "case": "mixed-groups",
+          "exit_code": 3,
+          "observed_differences": false,
+          "reliability": {
+            "left": {
+              "capture": "incomplete",
+              "storage": "verified"
+            },
+            "right": {
+              "capture": "incomplete",
+              "storage": "verified"
+            }
+          }
+        }
+      },
+      {
+        "case": "normal-access",
+        "samples": 3,
+        "record_exit_codes": [
+          0,
+          0,
+          0
+        ],
+        "expected_path_checks": [
+          true,
+          true,
+          true
+        ],
+        "completeness": [
+          "partial",
+          "partial",
+          "partial"
+        ],
+        "warnings_by_sample": [
+          [
+            "raw/trace.log:6: path context unresolved; last observed CWD is not a verified current path; consult raw evidence",
+            "raw/trace.log:7: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+          ],
+          [
+            "raw/trace.log:6: path context unresolved; last observed CWD is not a verified current path; consult raw evidence",
+            "raw/trace.log:7: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+          ],
+          [
+            "raw/trace.log:6: path context unresolved; last observed CWD is not a verified current path; consult raw evidence",
+            "raw/trace.log:7: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+          ]
+        ],
+        "baseline_diff_exit_codes": [
+          3,
+          3,
+          3
+        ],
+        "repeat": {
+          "case": "normal-access",
+          "exit_code": 3,
+          "observed_differences": false,
+          "reliability": {
+            "left": {
+              "capture": "incomplete",
+              "storage": "verified"
+            },
+            "right": {
+              "capture": "incomplete",
+              "storage": "verified"
+            }
+          }
+        }
+      },
+      {
+        "case": "shared-access",
+        "samples": 3,
+        "record_exit_codes": [
+          0,
+          0,
+          0
+        ],
+        "expected_path_checks": [
+          true,
+          true,
+          true
+        ],
+        "completeness": [
+          "partial",
+          "partial",
+          "partial"
+        ],
+        "warnings_by_sample": [
+          [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled",
+            "raw/trace.log:8: path context unresolved; last observed CWD is not a verified current path; consult raw evidence",
+            "raw/trace.log:9: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+          ],
+          [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled",
+            "raw/trace.log:8: path context unresolved; last observed CWD is not a verified current path; consult raw evidence",
+            "raw/trace.log:9: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+          ],
+          [
+            "shared filesystem state or root/namespace changes observed; cwd fallback disabled",
+            "raw/trace.log:8: path context unresolved; last observed CWD is not a verified current path; consult raw evidence",
+            "raw/trace.log:9: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+          ]
+        ],
+        "baseline_diff_exit_codes": [
+          3,
+          3,
+          3
+        ],
+        "repeat": {
+          "case": "shared-access",
+          "exit_code": 3,
+          "observed_differences": false,
+          "reliability": {
+            "left": {
+              "capture": "incomplete",
+              "storage": "verified"
+            },
+            "right": {
+              "capture": "incomplete",
+              "storage": "verified"
+            }
+          }
+        }
+      },
+      {
+        "case": "private-access",
+        "samples": 3,
+        "record_exit_codes": [
+          0,
+          0,
+          0
+        ],
+        "expected_path_checks": [
+          true,
+          true,
+          true
+        ],
+        "completeness": [
+          "partial",
+          "partial",
+          "partial"
+        ],
+        "warnings_by_sample": [
+          [
+            "raw/trace.log:8: path context unresolved; last observed CWD is not a verified current path; consult raw evidence",
+            "raw/trace.log:9: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+          ],
+          [
+            "raw/trace.log:8: path context unresolved; last observed CWD is not a verified current path; consult raw evidence",
+            "raw/trace.log:9: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+          ],
+          [
+            "raw/trace.log:8: path context unresolved; last observed CWD is not a verified current path; consult raw evidence",
+            "raw/trace.log:9: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+          ]
+        ],
+        "baseline_diff_exit_codes": [
+          3,
+          3,
+          3
+        ],
+        "repeat": {
+          "case": "private-access",
+          "exit_code": 3,
+          "observed_differences": false,
+          "reliability": {
+            "left": {
+              "capture": "incomplete",
+              "storage": "verified"
+            },
+            "right": {
+              "capture": "incomplete",
+              "storage": "verified"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "counts": {
+    "first_batch_records": 45,
+    "replay_records": 45,
+    "all_target_marker_checks_passed": true,
+    "all_open_path_checks_passed": true,
+    "false_absolute_paths_observed_in_synchronized_probes": 0
+  },
+  "scope_note": "No claim about unsynchronized overlap, external rename, unshare/exec transitions or arbitrary projects; file markers are probe output, not RunDelta content snapshots.",
+  "validation": {
+    "initial_extended_scan_exit": 1,
+    "initial_extended_scan_cause": "documentation slash-separated terminology matched the private-root-path pattern; wording corrected, no assertions changed",
+    "final_extended_scan_exit": 0,
+    "old_snapshot_scope_file_counts": [
+      26,
+      32
+    ],
+    "old_snapshot_validators_exit": [
+      0,
+      0
+    ],
+    "legacy_validators_on_expanded_tree": [
+      {
+        "script": "verify.py",
+        "exit_code": 1,
+        "cause": "fixed file inventory does not include new clone-fs-attribution directory; original validator not changed"
+      },
+      {
+        "script": "attribution/verify.py",
+        "exit_code": 1,
+        "cause": "fixed file inventory does not include new clone-fs-attribution directory; original validator not changed"
+      }
+    ],
+    "frozen_checks_exit_codes": {
+      "tests/check_regression_freeze.py": 0,
+      "docs/external-cases/pybind11-5626/verify.py": 0,
+      "docs/performance/a3-completion-check/verify.py": 0,
+      "docs/performance/a3-completion-check/verify_optimization.py": 0
+    }
+  },
+  "preservation": {
+    "protected_files_unchanged": 132,
+    "staged_binary_diff_unchanged": true,
+    "existing_alpha_files_unchanged": 32,
+    "added_files": 8
+  }
+}

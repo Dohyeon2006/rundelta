@@ -1,0 +1,135 @@
+[
+  {
+    "backend": "strace baseline",
+    "collector_exit_code": 0,
+    "collector_signal": null,
+    "command": [
+      "/usr/bin/baseline",
+      "--mode",
+      "fixed"
+    ],
+    "completeness": "complete_for_supported_events",
+    "cwd": "/baseline",
+    "directory": "runs/abc001-101",
+    "ended": 1010,
+    "environment": {
+      "BASELINE_MODE": "fixed",
+      "OPTIONAL": null
+    },
+    "exit_code": 0,
+    "id": "abc001-101",
+    "name": "baseline-left",
+    "parsed_events": 1,
+    "raw_lines": 1,
+    "schema_version": 3,
+    "signal": null,
+    "started": 1000,
+    "state": "completed",
+    "storage_integrity": {
+      "detail": "metadata and events match finalized byte counts, event count and SHA-256; raw logs are not checksummed",
+      "status": "verified"
+    },
+    "target_exit_raw": "+++ exited with 0 +++",
+    "tool_version": "0.1.0-baseline",
+    "warnings": []
+  },
+  {
+    "backend": "strace baseline",
+    "collector_exit_code": 0,
+    "collector_signal": null,
+    "command": [
+      "/usr/bin/baseline",
+      "--mode",
+      "fixed"
+    ],
+    "completeness": "complete_for_supported_events",
+    "cwd": "/baseline",
+    "directory": "runs/abc002-102",
+    "ended": 2010,
+    "environment": {
+      "BASELINE_MODE": "fixed",
+      "OPTIONAL": null
+    },
+    "exit_code": 0,
+    "id": "abc002-102",
+    "name": "baseline-right",
+    "parsed_events": 1,
+    "raw_lines": 1,
+    "schema_version": 3,
+    "signal": null,
+    "started": 2000,
+    "state": "completed",
+    "storage_integrity": {
+      "detail": "metadata and events match finalized byte counts, event count and SHA-256; raw logs are not checksummed",
+      "status": "verified"
+    },
+    "target_exit_raw": "+++ exited with 0 +++",
+    "tool_version": "0.1.0-baseline",
+    "warnings": []
+  },
+  {
+    "backend": "strace legacy",
+    "collector_exit_code": null,
+    "collector_signal": null,
+    "command": [
+      "/usr/bin/baseline",
+      "--mode",
+      "fixed"
+    ],
+    "completeness": null,
+    "cwd": "/baseline",
+    "directory": "runs/abc101-201",
+    "ended": 3010,
+    "environment": null,
+    "exit_code": 0,
+    "id": "abc101-201",
+    "name": "legacy-v1",
+    "parsed_events": 1,
+    "raw_lines": 1,
+    "schema_version": 1,
+    "signal": null,
+    "started": 3000,
+    "state": "completed",
+    "storage_integrity": {
+      "detail": "storage integrity unverified: legacy record has no finalization checksums",
+      "status": "unverified"
+    },
+    "target_exit_raw": null,
+    "tool_version": "0.1.0-legacy",
+    "warnings": []
+  },
+  {
+    "backend": "strace legacy",
+    "collector_exit_code": null,
+    "collector_signal": null,
+    "command": [
+      "/usr/bin/baseline",
+      "--mode",
+      "fixed"
+    ],
+    "completeness": "complete_for_supported_events",
+    "cwd": "/baseline",
+    "directory": "runs/abc102-202",
+    "ended": 4010,
+    "environment": {
+      "BASELINE_MODE": "fixed",
+      "OPTIONAL": null
+    },
+    "exit_code": 0,
+    "id": "abc102-202",
+    "name": "legacy-v2",
+    "parsed_events": 1,
+    "raw_lines": 1,
+    "schema_version": 2,
+    "signal": null,
+    "started": 4000,
+    "state": "completed",
+    "storage_integrity": {
+      "detail": "storage integrity unverified: legacy record has no finalization checksums",
+      "status": "unverified"
+    },
+    "target_exit_raw": null,
+    "tool_version": "0.1.0-legacy",
+    "warnings": []
+  }
+]

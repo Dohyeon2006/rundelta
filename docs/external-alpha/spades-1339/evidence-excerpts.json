@@ -1,0 +1,44 @@
+[
+  {
+    "run": "good-v3",
+    "evidence": {
+      "file": "raw/trace.log",
+      "line": 529,
+      "end_line": 531
+    },
+    "event": {
+      "kind": "exec",
+      "operation": "execve",
+      "path": "${WORK}/spades/install/SPAdes-4.0.0-Linux/bin/spades-hammer",
+      "outcome": "success",
+      "argv": [
+        "${WORK}/spades/install/SPAdes-4.0.0-Linux/bin/spades-hammer",
+        "${WORK}/spades/runtime/bin/spades_test/corrected/configs/config.info"
+      ],
+      "cwd_before": null,
+      "context_uncertain": false
+    },
+    "decoded_redacted_excerpt": "<PID> execve(\"${WORK}/spades/install/SPAdes-4.0.0-Linux/bin/spades-hammer\", [\"${WORK}/spades/install/SPAdes-4.0.0-Linux/bin/spades-hammer\", \"${WORK}/spades/runtime/bin/spades_test/corrected/configs/config.info\"], <ADDRESS> /* 11 vars */ <unfinished ...>\n<PID> <... vfork resumed>)              = <CHILD_PID>\n<PID> <... execve resumed>)             = 0"
+  },
+  {
+    "run": "bad-v3",
+    "evidence": {
+      "file": "raw/trace.log",
+      "line": 529,
+      "end_line": 531
+    },
+    "event": {
+      "kind": "exec",
+      "operation": "execve",
+      "path": "${WORK}/spades/install with spaces/SPAdes-4.0.0-Linux/bin/spades-hammer",
+      "outcome": "success",
+      "argv": [
+        "${WORK}/spades/install with spaces/SPAdes-4.0.0-Linux/bin/spades-hammer",
+        "${WORK}/spades/runtime with spaces/bin/spades_test/corrected/configs/config.info"
+      ],
+      "cwd_before": null,
+      "context_uncertain": false
+    },
+    "decoded_redacted_excerpt": "<PID> execve(\"${WORK}/spades/install with spaces/SPAdes-4.0.0-Linux/bin/spades-hammer\", [\"${WORK}/spades/install with spaces/SPAdes-4.0.0-Linux/bin/spades-hammer\", \"${WORK}/spades/runtime with spaces/bin/spades_test/corrected/configs/config.info\"], <ADDRESS> /* 11 vars */ <unfinished ...>\n<PID> <... vfork resumed>)              = <CHILD_PID>\n<PID> <... execve resumed>)             = 0"
+  }
+]

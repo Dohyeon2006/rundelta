@@ -1,0 +1,240 @@
+[
+  {
+    "case": "cmake",
+    "comparison": "normal",
+    "clues": [],
+    "groups": [
+      {
+        "rule": "R1-recurring-generated-family",
+        "members": [
+          14,
+          15,
+          80,
+          81
+        ],
+        "pattern": "${ARTIFACTS}/cmake/build/CMakeCache.txt.{slot}",
+        "evidence": {
+          "operation": "openat",
+          "left_instances": 2,
+          "right_instances": 2,
+          "calls_per_path": [
+            1,
+            2
+          ],
+          "writer": "${TOOLING}/build-tools/lib/python3.12/site-packages/cmake/data/bin/cmake",
+          "parent": "/usr/bin/sh",
+          "same_process_within_each_run": true,
+          "write_witness": "successful O_CREAT with O_EXCL or O_TRUNC on every member"
+        },
+        "equivalence": "unverified; grouping is not proof of identical content or task",
+        "includes_errors": false,
+        "id": "G1"
+      }
+    ],
+    "detail_counts": [
+      {
+        "group": "G1",
+        "changes": 4,
+        "events": 6
+      }
+    ]
+  },
+  {
+    "case": "cmake",
+    "comparison": "abnormal",
+    "clues": [
+      {
+        "raw_rank": 2,
+        "change": {
+          "category": "File access outcome changes",
+          "subject": "${ARTIFACTS}/cmake/include/answer.h (openat)",
+          "detail_group": null,
+          "left": [
+            "success"
+          ],
+          "right": [
+            "ENOENT"
+          ],
+          "left_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 2352,
+              "end_line": 2352
+            }
+          ],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 2352,
+              "end_line": 2352
+            }
+          ]
+        }
+      }
+    ],
+    "groups": [
+      {
+        "rule": "R1-recurring-generated-family",
+        "members": [
+          13,
+          14,
+          79,
+          80
+        ],
+        "pattern": "${ARTIFACTS}/cmake/build/CMakeCache.txt.{slot}",
+        "evidence": {
+          "operation": "openat",
+          "left_instances": 2,
+          "right_instances": 2,
+          "calls_per_path": [
+            1,
+            2
+          ],
+          "writer": "${TOOLING}/build-tools/lib/python3.12/site-packages/cmake/data/bin/cmake",
+          "parent": "/usr/bin/sh",
+          "same_process_within_each_run": true,
+          "write_witness": "successful O_CREAT with O_EXCL or O_TRUNC on every member"
+        },
+        "equivalence": "unverified; grouping is not proof of identical content or task",
+        "includes_errors": false,
+        "id": "G1"
+      }
+    ],
+    "detail_counts": [
+      {
+        "group": "G1",
+        "changes": 4,
+        "events": 6
+      }
+    ]
+  },
+  {
+    "case": "cargo",
+    "comparison": "normal",
+    "clues": [],
+    "groups": [
+      {
+        "rule": "R1-recurring-generated-family",
+        "members": [
+          10,
+          11,
+          28,
+          29
+        ],
+        "pattern": "${ARTIFACTS}/cargo/target/debug/deps/fold_probe-188b3d9c92a820fb.{slot}",
+        "evidence": {
+          "operation": "openat",
+          "left_instances": 2,
+          "right_instances": 2,
+          "calls_per_path": [
+            1,
+            1
+          ],
+          "writer": "${HOME}/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-lld",
+          "parent": "/usr/libexec/gcc/x86_64-redhat-linux/16/collect2",
+          "same_process_within_each_run": true,
+          "write_witness": "successful O_CREAT with O_EXCL or O_TRUNC on every member"
+        },
+        "equivalence": "unverified; grouping is not proof of identical content or task",
+        "includes_errors": false,
+        "id": "G1"
+      }
+    ],
+    "detail_counts": [
+      {
+        "group": "G1",
+        "changes": 4,
+        "events": 4
+      }
+    ]
+  },
+  {
+    "case": "cargo",
+    "comparison": "abnormal",
+    "clues": [
+      {
+        "raw_rank": 2,
+        "change": {
+          "category": "File access outcome changes",
+          "subject": "${ARTIFACTS}/cargo/src/build-input (openat)",
+          "detail_group": null,
+          "left": [
+            "success"
+          ],
+          "right": [
+            "ENOENT"
+          ],
+          "left_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 384,
+              "end_line": 384
+            }
+          ],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 384,
+              "end_line": 384
+            }
+          ]
+        }
+      }
+    ],
+    "groups": [],
+    "detail_counts": []
+  },
+  {
+    "case": "pip",
+    "comparison": "normal",
+    "clues": [],
+    "groups": [],
+    "detail_counts": []
+  },
+  {
+    "case": "pip",
+    "comparison": "abnormal",
+    "clues": [
+      {
+        "raw_rank": 2,
+        "change": {
+          "category": "File access outcome changes",
+          "subject": "${ARTIFACTS}/pip/fixture_payload-0.1-py3-none-any.whl (openat)",
+          "detail_group": null,
+          "left": [
+            "success"
+          ],
+          "right": [
+            "EACCES"
+          ],
+          "left_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 1689,
+              "end_line": 1689
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 1690,
+              "end_line": 1690
+            },
+            {
+              "file": "raw/trace.log",
+              "line": 1693,
+              "end_line": 1693
+            }
+          ],
+          "right_evidence": [
+            {
+              "file": "raw/trace.log",
+              "line": 1689,
+              "end_line": 1689
+            }
+          ]
+        }
+      }
+    ],
+    "groups": [],
+    "detail_counts": []
+  }
+]

@@ -1,0 +1,4 @@
+abc001-101	baseline-left	runs/abc001-101	capture=complete_for_supported_events	storage=verified	metadata and events match finalized byte counts, event count and SHA-256; raw logs are not checksummed
+abc002-102	baseline-right	runs/abc002-102	capture=complete_for_supported_events	storage=verified	metadata and events match finalized byte counts, event count and SHA-256; raw logs are not checksummed
+abc101-201	legacy-v1	runs/abc101-201	capture=unknown	storage=unverified	storage integrity unverified: legacy record has no finalization checksums
+abc102-202	legacy-v2	runs/abc102-202	capture=complete_for_supported_events	storage=unverified	storage integrity unverified: legacy record has no finalization checksums

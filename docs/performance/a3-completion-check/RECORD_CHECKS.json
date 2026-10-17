@@ -1,0 +1,74 @@
+[
+  {
+    "events": 2000,
+    "processes": 1,
+    "exited_processes": 1,
+    "modeled_predicate_visits_from_loaded_events": 4000000,
+    "storage": "verified",
+    "source": "actual product show of warmup record; audit outside timed samples"
+  },
+  {
+    "events": 2000,
+    "processes": 16,
+    "exited_processes": 16,
+    "modeled_predicate_visits_from_loaded_events": 4015000,
+    "storage": "verified",
+    "source": "actual product show of warmup record; audit outside timed samples"
+  },
+  {
+    "events": 2000,
+    "processes": 128,
+    "exited_processes": 128,
+    "modeled_predicate_visits_from_loaded_events": 4125128,
+    "storage": "verified",
+    "source": "actual product show of warmup record; audit outside timed samples"
+  },
+  {
+    "events": 8000,
+    "processes": 1,
+    "exited_processes": 1,
+    "modeled_predicate_visits_from_loaded_events": 64000000,
+    "storage": "verified",
+    "source": "actual product show of warmup record; audit outside timed samples"
+  },
+  {
+    "events": 8000,
+    "processes": 16,
+    "exited_processes": 16,
+    "modeled_predicate_visits_from_loaded_events": 64060000,
+    "storage": "verified",
+    "source": "actual product show of warmup record; audit outside timed samples"
+  },
+  {
+    "events": 8000,
+    "processes": 128,
+    "exited_processes": 128,
+    "modeled_predicate_visits_from_loaded_events": 64506016,
+    "storage": "verified",
+    "source": "actual product show of warmup record; audit outside timed samples"
+  },
+  {
+    "events": 32000,
+    "processes": 1,
+    "exited_processes": 1,
+    "modeled_predicate_visits_from_loaded_events": 1024000000,
+    "storage": "verified",
+    "source": "actual product show of warmup record; audit outside timed samples"
+  },
+  {
+    "events": 32000,
+    "processes": 16,
+    "exited_processes": 16,
+    "modeled_predicate_visits_from_loaded_events": 1024240000,
+    "storage": "verified",
+    "source": "actual product show of warmup record; audit outside timed samples"
+  },
+  {
+    "events": 32000,
+    "processes": 128,
+    "exited_processes": 128,
+    "modeled_predicate_visits_from_loaded_events": 1026032000,
+    "storage": "verified",
+    "source": "actual product show of warmup record; audit outside timed samples"
+  }
+]

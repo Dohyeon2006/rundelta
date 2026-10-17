@@ -1,0 +1,185 @@
+{
+  "script_exit_code": 0,
+  "independent_fresh_workspace": true,
+  "strict_hits": {
+    "pybind": true,
+    "meson": false,
+    "spades": false
+  },
+  "comparisons": {
+    "pybind/diff": {
+      "record_exit_codes": [
+        0,
+        1
+      ],
+      "diff_exit_code": 1,
+      "reliability": {
+        "left": {
+          "capture": "complete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "complete",
+          "storage": "verified"
+        }
+      },
+      "total_changes": 635,
+      "first_five_categories": [
+        "Exit status",
+        "Selected startup environment",
+        "New file access",
+        "New file access",
+        "New file access"
+      ],
+      "run_warnings": {
+        "good": [],
+        "bad": []
+      }
+    },
+    "meson/diff": {
+      "record_exit_codes": [
+        0,
+        1
+      ],
+      "diff_exit_code": 3,
+      "reliability": {
+        "left": {
+          "capture": "incomplete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "incomplete",
+          "storage": "verified"
+        }
+      },
+      "total_changes": 856,
+      "first_five_categories": [
+        "Exit status",
+        "Capture completeness",
+        "Command arguments",
+        "Executable changes",
+        "Executable changes"
+      ],
+      "run_warnings": {
+        "good": [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+        ],
+        "bad": [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled",
+          "raw/trace.log:1240: path context unresolved; last observed CWD is not a verified current path; consult raw evidence",
+          "raw/trace.log:1964: path context unresolved; last observed CWD is not a verified current path; consult raw evidence"
+        ]
+      }
+    },
+    "spades/diff": {
+      "record_exit_codes": [
+        127,
+        127
+      ],
+      "diff_exit_code": 1,
+      "reliability": {
+        "left": {
+          "capture": "complete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "complete",
+          "storage": "verified"
+        }
+      },
+      "total_changes": 3,
+      "first_five_categories": [
+        "Command arguments",
+        "Executable changes",
+        "Executable changes"
+      ],
+      "run_warnings": {
+        "good": [],
+        "bad": []
+      }
+    },
+    "spades/diff-v2": {
+      "record_exit_codes": [
+        0,
+        0
+      ],
+      "diff_exit_code": 3,
+      "reliability": {
+        "left": {
+          "capture": "incomplete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "incomplete",
+          "storage": "verified"
+        }
+      },
+      "total_changes": 6288,
+      "first_five_categories": [
+        "Capture completeness",
+        "Command arguments",
+        "Executable changes",
+        "Executable changes",
+        "Executable changes"
+      ],
+      "run_warnings": {
+        "good-v2": [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+        ],
+        "bad-v2": [
+          "raw/trace.log:24101: unfinished call at end of trace",
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+        ]
+      }
+    },
+    "spades/diff-v3": {
+      "record_exit_codes": [
+        0,
+        4
+      ],
+      "diff_exit_code": 3,
+      "reliability": {
+        "left": {
+          "capture": "incomplete",
+          "storage": "verified"
+        },
+        "right": {
+          "capture": "incomplete",
+          "storage": "verified"
+        }
+      },
+      "total_changes": 3659,
+      "first_five_categories": [
+        "Exit status",
+        "Initial working directory",
+        "Command arguments",
+        "Executable changes",
+        "Executable changes"
+      ],
+      "run_warnings": {
+        "good-v3": [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+        ],
+        "bad-v3": [
+          "shared filesystem state or root/namespace changes observed; cwd fallback disabled"
+        ]
+      }
+    }
+  },
+  "additional_unresolved_observation": {
+    "run": "spades/bad-v2",
+    "evidence": [
+      {
+        "file": "raw/trace.log",
+        "line": 24101,
+        "decoded_redacted_excerpt": "<PID> ???( <unfinished ...>"
+      },
+      {
+        "file": "raw/trace.log",
+        "line": 24107,
+        "decoded_redacted_excerpt": "<PID> +++ exited with 0 +++"
+      }
+    ],
+    "assessment": "Unrecognized unfinished syscall in the trace, not proven to be a RunDelta parser defect. Warning retained; capture remains incomplete; target exit is 0; storage remains verified."
+  }
+}

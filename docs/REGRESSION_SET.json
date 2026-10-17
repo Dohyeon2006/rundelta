@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "purpose": "regression only; not ranking tuning",
+  "sha256": {
+    "examples/field_cases.py": "3729e9e68b8e3942104a40b98f2cf1ddfe5aa19f59239ef62d3f9cb32ea1c795",
+    "tests/field_report_audit.py": "79f76398aa58b3a4e209b794d583294c610b616344500738b0888aa04ea1b34b",
+    "docs/RANKING_REPAIR_RESULTS.json": "8bc730737c4fd09581ca2cced6253e2fd8d5485c4f41e0255e906d27d808c915"
+  }
+}

@@ -1,0 +1,1 @@
+102 openat(AT_FDCWD, "/baseline/input.txt", O_RDONLY) = -1 ENOENT (No such file or directory)

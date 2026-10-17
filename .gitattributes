@@ -1,0 +1,2 @@
+docs/external-cases/pybind11-5626/repeat-differences.csv -text whitespace=cr-at-eol
+docs/external-cases/pybind11-5626/parent-processes.csv -text whitespace=cr-at-eol

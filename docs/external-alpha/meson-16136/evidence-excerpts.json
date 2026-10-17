@@ -1,0 +1,38 @@
+[
+  {
+    "run": "good",
+    "evidence": {
+      "file": "raw/trace.log",
+      "line": 37,
+      "end_line": 37
+    },
+    "event": {
+      "kind": "file",
+      "operation": "openat",
+      "path": "${WORK}/meson/fixture/meson-cargo-path-dep-reproducer/bar/Cargo.toml",
+      "outcome": "success",
+      "argv": null,
+      "cwd_before": null,
+      "context_uncertain": false
+    },
+    "decoded_redacted_excerpt": "<PID> openat(AT_FDCWD<${WORK}/meson>, \"${WORK}/meson/fixture/meson-cargo-path-dep-reproducer/bar/Cargo.toml\", O_RDONLY|O_CLOEXEC) = 3<${WORK}/meson/fixture/meson-cargo-path-dep-reproducer/bar/Cargo.toml>"
+  },
+  {
+    "run": "bad",
+    "evidence": {
+      "file": "raw/trace.log",
+      "line": 2017,
+      "end_line": 2017
+    },
+    "event": {
+      "kind": "file",
+      "operation": "openat",
+      "path": "${WORK}/meson/fixture/meson-cargo-path-dep-reproducer/./bar/Cargo.toml",
+      "outcome": "success",
+      "argv": null,
+      "cwd_before": null,
+      "context_uncertain": false
+    },
+    "decoded_redacted_excerpt": "<PID> openat(AT_FDCWD<${WORK}/meson>, \"${WORK}/meson/fixture/meson-cargo-path-dep-reproducer/./bar/Cargo.toml\", O_RDONLY|O_CLOEXEC) = 6<${WORK}/meson/fixture/meson-cargo-path-dep-reproducer/bar/Cargo.toml>"
+  }
+]
